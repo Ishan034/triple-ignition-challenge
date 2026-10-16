@@ -1,23 +1,36 @@
 # Triple Ignition Challenge
 
-A prediction mapping solution for **MaverickX**, an enzyme company, to help address its contamination problem.
+A contamination monitoring and diagnosis system for **MaverickX**, an enzyme company, to help address contamination in its enzyme production.
 
 ## Goal
 
-Build a model that predicts where and when contamination is likely to occur, and present those predictions as a map so the team can act on high-risk areas first.
+Build a decision-support prototype that analyses enzyme-production batch data to:
+
+1. **Detect** batches that deviate from their normal production profile.
+2. **Trace** plausible contamination sources from batch history (inputs, equipment, process steps, timing).
+3. **Assess** confidence and severity as separate dimensions.
+4. **Recommend** the next confirmatory check, leaving final decisions to scientists.
+
+The system investigates contamination; it does not predict future contamination or replace laboratory confirmation. See [`docs/project-context.md`](docs/project-context.md) for the full background, architecture, MVP scope and validation plan.
 
 ## Status
 
-Early stage — the repository has just been set up. Data, models and mapping code will be added as the project develops.
+Early stage. The MVP is being built on synthetic α-amylase fermentation data with simulated bacterial (*E. coli*) contamination while real MaverickX batch data is requested. Deadline: 28 October 2026.
 
 ## Planned structure
 
 ```
-data/        Raw and processed input data
+data/        Synthetic and (later) authorised batch data
 notebooks/   Exploration and experiments
-src/         Data pipeline, model training and prediction code
-maps/        Generated prediction maps
+src/         Ingestion, preprocessing, anomaly detection and diagnostic rules
+app/         Streamlit investigation dashboard
+tests/       pytest suite
+docs/        Project context and technical notes
 ```
+
+## Planned stack
+
+Python, pandas, NumPy/SciPy, scikit-learn, Streamlit, Plotly, NetworkX, pytest.
 
 ## Getting started
 
@@ -26,3 +39,6 @@ Setup instructions will be added once the first code lands.
 ## Contributors
 
 - Ishan Singh ([@Ishan034](https://github.com/Ishan034))
+- Aisha Jawad
+- Beren Abedan
+- Trisha
