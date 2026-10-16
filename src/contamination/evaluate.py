@@ -1,0 +1,98 @@
+"""Batch-level evaluation of detectors against reviewed outcomes.
+
+The outcomes table is used *only* here, never by the reference or detectors.
+
+* A contaminated or non-contamination-anomaly batch counts as flagged only if an
+  alert was raised at or after the onset; alerts before the onset cannot be caused
+  by it and are counted as false alerts instead.
+* ``lead_time_vs_reference_h`` = reference event time (when today's method, the
+  visual/odour note, would have caught it) minus first alert time. Positive means the
+  system raised the alert earlier.
+* With few cases these estimates are very uncertain: report counts, not just ratios.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+
+from .alerts import Alert
+
+SYNTHETIC_CAVEAT = (
+    "SYNTHETIC DATA: these figures show the software behaves as intended on simulated "
+    "batches. They are not real-world contamination-detection performance."
+)
+
+
+def _first_alert(alerts: list[Alert], batch_id: str, after_h: float | None) -> float:
+    times = [
+        a.first_raised_h
+        for a in alerts
+        if a.batch_id == batch_id and (after_h is None or a.start_h >= after_h)
+    ]
+    return min(times) if times else np.nan
+
+
+def per_batch(
+    alerts: list[Alert], outcomes: pd.DataFrame, detectors: set[str] | None = None
+) -> pd.DataFrame:
+    selected = [a for a in alerts if detectors is None or a.detector in detectors]
+    rows = []
+    for o in outcomes.itertuples(index=False):
+        onset = None if pd.isna(o.onset_h) else float(o.onset_h)
+        first_any = _first_alert(selected, o.batch_id, None)
+        first_after = _first_alert(selected, o.batch_id, onset) if onset is not None else first_any
+        n_alerts = sum(a.batch_id == o.batch_id for a in selected)
+        n_before = sum(
+            a.batch_id == o.batch_id and onset is not None and a.start_h < onset for a in selected
+        )
+        rows.append(
+            {
+                "batch_id": o.batch_id,
+                "category": o.category,
+                "scenario": o.scenario,
+                "flagged": bool(np.isfinite(first_after)),
+                "first_alert_h": first_after,
+                "n_alerts": n_alerts,
+                "false_alerts": n_alerts if o.category == "normal" else n_before,
+                "onset_to_alert_h": first_after - onset if onset is not None else np.nan,
+                "lead_time_vs_reference_h": (o.reference_event_h - first_after)
+                if o.category == "contamination"
+                else np.nan,
+                "first_alert_any_h": first_any,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def evaluate(
+    alerts: list[Alert], outcomes: pd.DataFrame, detectors: set[str] | None = None
+) -> dict:
+    pb = per_batch(alerts, outcomes, detectors)
+    cont = pb[pb["category"] == "contamination"]
+    normal = pb[pb["category"] == "normal"]
+    other = pb[pb["category"] == "non_contamination_anomaly"]
+    flagged = pb[pb["flagged"] | (pb["first_alert_any_h"].notna())]
+    n_flagged_cont = int(cont["flagged"].sum())
+    return {
+        "detectors": "all" if detectors is None else "+".join(sorted(detectors)),
+        "contamination_flagged": f"{n_flagged_cont}/{len(cont)}",
+        "sensitivity": n_flagged_cont / len(cont) if len(cont) else np.nan,
+        "normal_flagged": f"{int(normal['flagged'].sum())}/{len(normal)}",
+        "specificity": 1 - normal["flagged"].mean() if len(normal) else np.nan,
+        "non_contam_anomaly_flagged": f"{int(other['flagged'].sum())}/{len(other)}",
+        "precision_for_contamination": n_flagged_cont / len(flagged) if len(flagged) else np.nan,
+        "false_alerts_per_batch": pb["false_alerts"].sum() / len(pb) if len(pb) else np.nan,
+        "median_onset_to_alert_h": float(np.nanmedian(cont["onset_to_alert_h"]))
+        if n_flagged_cont
+        else np.nan,
+        "median_lead_vs_reference_h": float(np.nanmedian(cont["lead_time_vs_reference_h"]))
+        if n_flagged_cont
+        else np.nan,
+    }
+
+
+def compare_detectors(alerts: list[Alert], outcomes: pd.DataFrame, detector_names) -> pd.DataFrame:
+    rows = [evaluate(alerts, outcomes, {d}) for d in detector_names]
+    rows.append(evaluate(alerts, outcomes, None))
+    return pd.DataFrame(rows)

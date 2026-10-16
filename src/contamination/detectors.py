@@ -1,0 +1,87 @@
+"""Layer 4, anomaly detection statistics.
+
+Each detector turns a sequence of robust z-scores for one variable in one batch
+(ordered by measurement time, valid observations only) into a signed monitoring
+statistic. An alert is raised where ``|statistic| > limit``.
+
+* ``robust_threshold``: the robust z itself, ``z = (x - median) / (1.4826 * MAD)``.
+  Reacts to large single deviations.
+* ``ewma``: ``E_t = lambda * z_t + (1 - lambda) * E_{t-1}``, with ``E_0 = 0``. Reacts to
+  smaller sustained shifts. Default limit ``L * sqrt(lambda / (2 - lambda))``.
+* ``cusum``: two-sided tabular CUSUM, ``S+_t = max(0, S+_{t-1} + z_t - k)`` and
+  ``S-_t = max(0, S-_{t-1} - z_t - k)``. Accumulates evidence of a persistent shift.
+
+These are measures of how unusual the process is. None of them is a probability of
+contamination.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import numpy as np
+
+ALGORITHM_VERSION = "0.1.0"
+
+
+@dataclass(frozen=True)
+class DetectorSpec:
+    name: str
+    description: str
+
+
+DETECTORS: dict[str, DetectorSpec] = {
+    "robust_threshold": DetectorSpec(
+        "robust_threshold", "Single reading far from the reference median (robust z-score)"
+    ),
+    "ewma": DetectorSpec("ewma", "Sustained shift in the smoothed (EWMA) deviation"),
+    "cusum": DetectorSpec("cusum", "Accumulated persistent deviation (two-sided CUSUM)"),
+}
+
+
+def robust_z(value: np.ndarray, median: np.ndarray, scale: np.ndarray) -> np.ndarray:
+    return (np.asarray(value, float) - np.asarray(median, float)) / np.asarray(scale, float)
+
+
+def ewma(z: np.ndarray, lam: float = 0.2) -> np.ndarray:
+    """EWMA of z. NaN inputs (no reference) leave the state unchanged and output NaN."""
+    out = np.full(len(z), np.nan)
+    e = 0.0
+    for i, zi in enumerate(z):
+        if np.isfinite(zi):
+            e = lam * zi + (1.0 - lam) * e
+            out[i] = e
+    return out
+
+
+def ewma_limit(L: float = 3.0, lam: float = 0.2) -> float:
+    """Asymptotic EWMA control limit for standardised (unit-variance) input."""
+    return L * np.sqrt(lam / (2.0 - lam))
+
+
+def cusum(z: np.ndarray, k: float = 0.5) -> np.ndarray:
+    """Signed two-sided CUSUM: +S+ when the upward sum dominates, -S- otherwise."""
+    out = np.full(len(z), np.nan)
+    sp = sm = 0.0
+    for i, zi in enumerate(z):
+        if np.isfinite(zi):
+            sp = max(0.0, sp + zi - k)
+            sm = max(0.0, sm - zi - k)
+            out[i] = sp if sp >= sm else -sm
+    return out
+
+
+def statistics(z: np.ndarray, ewma_lambda: float, cusum_k: float) -> dict[str, np.ndarray]:
+    return {
+        "robust_threshold": np.asarray(z, float),
+        "ewma": ewma(z, ewma_lambda),
+        "cusum": cusum(z, cusum_k),
+    }
+
+
+def default_limits(ewma_lambda: float, ewma_L: float, robust_limit: float, cusum_h: float) -> dict:
+    return {
+        "robust_threshold": robust_limit,
+        "ewma": ewma_limit(ewma_L, ewma_lambda),
+        "cusum": cusum_h,
+    }

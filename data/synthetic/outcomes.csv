@@ -1,0 +1,56 @@
+batch_id,category,scenario,outcome_status,onset_h,reference_event_h,simulated_source,reason,data_origin
+B001,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B002,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B003,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B004,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B005,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B006,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B007,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B008,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B009,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B010,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B011,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B012,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B013,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B014,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B015,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B016,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B017,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B018,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B019,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B020,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B021,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B022,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B023,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B024,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B025,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B026,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B027,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B028,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B029,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B030,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B031,contamination,contamination,confirmed,17.02,31.0,medium lot M-12,Simulated bacterial contaminant from 17.02 h,synthetic
+B032,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B033,non_contamination_anomaly,sensor_spike,confirmed,14.0,,,Simulated single faulty pH reading at 14.0 h,synthetic
+B034,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B035,contamination,contamination,confirmed,18.77,32.0,medium lot M-12,Simulated bacterial contaminant from 18.77 h,synthetic
+B036,normal,slow_growth,confirmed,,,,"Simulated legitimate slow growth (longer lag, lower growth rate)",synthetic
+B037,normal,slow_growth,confirmed,,,,"Simulated legitimate slow growth (longer lag, lower growth rate)",synthetic
+B038,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B039,non_contamination_anomaly,sensor_spike,confirmed,16.0,,,Simulated single faulty pH reading at 16.0 h,synthetic
+B040,contamination,contamination,confirmed,21.7,38.0,medium lot M-12,Simulated bacterial contaminant from 21.7 h,synthetic
+B041,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B042,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B043,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B044,non_contamination_anomaly,do_probe_drift,confirmed,16.0,,,Simulated DO probe drift from 16.0 h,synthetic
+B045,contamination,contamination,confirmed,23.08,35.0,medium lot M-12,Simulated bacterial contaminant from 23.08 h,synthetic
+B046,contamination,contamination,confirmed,21.36,34.0,independent (not lot-related),Simulated bacterial contaminant from 21.36 h,synthetic
+B047,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B048,contamination,contamination,confirmed,21.86,36.0,independent (not lot-related),Simulated bacterial contaminant from 21.86 h,synthetic
+B049,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B050,non_contamination_anomaly,do_probe_drift,confirmed,19.0,,,Simulated DO probe drift from 19.0 h,synthetic
+B051,non_contamination_anomaly,do_probe_drift,confirmed,23.0,,,Simulated DO probe drift from 23.0 h,synthetic
+B052,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B053,non_contamination_anomaly,sensor_spike,confirmed,11.0,,,Simulated single faulty pH reading at 11.0 h,synthetic
+B054,normal,normal,confirmed,,,,Simulated normal batch,synthetic
+B055,normal,slow_growth,confirmed,,,,"Simulated legitimate slow growth (longer lag, lower growth rate)",synthetic
