@@ -150,3 +150,31 @@ def review_anchor_times(alerts: list[Alert], outcomes: pd.DataFrame) -> dict[str
         if np.isfinite(t):
             out[o.batch_id] = t
     return out
+
+
+def evaluate_tracing(trace, outcomes: pd.DataFrame) -> dict:
+    """Compare source-tracing leads with the planted (simulated) common source."""
+    src = outcomes["simulated_source"].fillna("").astype(str)
+    planted_names = sorted({s for s in src if s and not s.startswith("independent")})
+    planted = planted_names[0] if planted_names else None
+    planted_cases = outcomes.loc[src == planted, "batch_id"].tolist() if planted else []
+    independent = outcomes.loc[src.str.startswith("independent"), "batch_id"].tolist()
+    tiers = {c.resource: c.tier for c in trace.candidates}
+    strong = [c.resource for c in trace.candidates if c.tier == "strong lead"]
+    leads = trace.leads
+
+    def linked_to(batch_id: str, resource: str) -> bool:
+        return any(s.resource == resource for s in trace.per_case.get(batch_id, []))
+
+    def strong_link(batch_id: str) -> bool:
+        return any(s.tier == "strong lead" for s in trace.per_case.get(batch_id, []))
+
+    return {
+        "planted_source": planted or "",
+        "planted_tier": tiers.get(planted, "not a candidate") if planted else "",
+        "planted_is_top_lead": bool(planted and leads and leads[0].resource == planted),
+        "false_strong_leads": ", ".join(s for s in strong if s != planted),
+        "n_possible_leads": sum(c.tier == "possible lead" for c in trace.candidates),
+        "planted_cases_linked": f"{sum(linked_to(b, planted) for b in planted_cases)}/{len(planted_cases)}",
+        "independent_cases_without_strong_lead": f"{sum(not strong_link(b) for b in independent)}/{len(independent)}",
+    }

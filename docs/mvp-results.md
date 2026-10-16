@@ -81,6 +81,43 @@ explanation was strong enough to lead, so the scientist is asked to investigate 
   in the batch, for example a small genuine temperature offset (read as a process-condition
   change) or noise just after onset (read as a measurement glitch).
 
+## Source tracing (seeds 11–30)
+
+Each synthetic campaign plants one common source: 4 of the 6 contaminated test batches
+use medium lot `M-12`. The other 2 contaminations are independent. Batch statuses come
+from the end-of-batch diagnoses (process evidence only), and reference batches count as
+approved normal. Each medium lot, inoculum lot and bioreactor is compared between users
+and non-users (one-sided Fisher's exact test, Bonferroni-corrected), and then checked for
+confounding with any stronger lead.
+
+| Measure | Result |
+|---|---|
+| Planted lot ranked as the top **strong lead** | 20 / 20 seeds |
+| Planted cases linked to the planted lot | 80 / 80 |
+| Seeds with a false strong lead | 1 / 20 (inoculum lot I-11 in seed 23) |
+| Independent cases left without a strong lead | 38 / 40 |
+| "Possible leads" per campaign (shared by ≥ 2 cases, relative risk ≥ 2, not significant) | 2.3 on average |
+
+The false strong lead in seed 23 is a genuine chance cluster: the two independent cases
+ran inside the same 5-batch inoculum lot. The data can't tell that apart from a real
+common source, so it's reasonable for the system to raise it as a lead. The possible leads
+are mostly the same kind of chance co-occurrence among consecutive batches. That's why
+the report calls them leads for investigation, not proof.
+
+Two rules came out of development:
+
+- **Over-representation, not just sharing.** Both bioreactors are always shared by several
+  cases, but cases are no more common there than elsewhere (relative risk ≈ 1). They're
+  labelled "not over-represented" rather than "possible lead".
+- **Confounding check.** An inoculum lot overlapping the planted medium-lot batches looked
+  significant only because of that overlap (in 3 of 20 seeds). Further strong leads must
+  stay significant once batches that used a stronger lead are excluded. Otherwise they're
+  downgraded, with a note explaining the overlap.
+
+Tracing fills the report's **affected scope** (linked cases and the resources linking
+them, plus any other batches that used a strong-lead resource and need review). It also
+adds a **Possible sources** section with a suggested check per resource type.
+
 ## Design decisions made while building the diagnosis layer
 
 These came from failures found during development. Each is a parameter or rule in
@@ -108,5 +145,10 @@ These came from failures found during development. Each is a parameter or rule i
   to change, and some may not hold at all.
 - Detector limits are set from 30 reference batches. Fewer batches give looser references
   and more unresolved diagnoses (seen in the 20-batch test fixture).
-- Affected scope is always "single batch" until source tracing (batch genealogy) is built.
+- Source tracing only knows the genealogy recorded in the batches table (medium lot,
+  inoculum lot, bioreactor). Water, transfer lines, operators and environmental samples
+  aren't modelled. With a small campaign, chance clusters of consecutive batches can't be
+  told apart from a real common source.
+- Statuses for tracing come from end-of-batch diagnoses (a retrospective campaign review).
+  A live view would need statuses built with `as_of_h`.
 - None of the check turnaround times or costs are real MaverickX figures.

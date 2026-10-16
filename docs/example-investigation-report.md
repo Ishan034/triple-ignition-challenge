@@ -31,15 +31,21 @@
 - **contamination evidence**: confirmed by independent test
 - **process deviation**: substantially abnormal
 - **quality impact**: deviation established (enzyme activity below reference from 36 h)
-- **affected scope**: single batch (source tracing not yet run)
+- **affected scope**: linked cases B035, B040, B045 via medium lot M-12, inoculum lot I-07
 - **confidence**: strong (supported by an independent test)
 
-## 5. Recommended next checks
+## 5. Possible sources (leads for investigation, not proof)
+- **medium lot M-12** (strong lead): 4 of 4 classified batches using it are contamination cases (100%), vs 2 of 51 that did not use it (4%); one-sided Fisher p = 4.4e-05, Bonferroni-adjusted 0.00026 over 6 resources. A shared resource is a lead, not proof of cause.
+  - suggested check: Test a retained sample of the medium lot (sterility / bioburden)
+- **inoculum lot I-07** (possible lead): 2 of 5 classified batches using it are contamination cases (40%), vs 4 of 50 that did not use it (8%); one-sided Fisher p = 0.086, Bonferroni-adjusted 0.52 over 6 resources. A shared resource is a lead, not proof of cause.
+  - suggested check: Check purity of the inoculum stock (streak plate / microscopy)
+
+## 6. Recommended next checks
 1. Review batch record (inoculum age, medium lot, setpoints, operator notes) (~0.5 h, low cost): informative about Raw-material or process-condition change (H03)
 2. Plate count on selective medium (~36 h, low cost): informative about Biological contamination (H01)
 3. Targeted qPCR for a suspected contaminant (~4 h, high cost): informative about Biological contamination (H01)
 
-## 6. Scientist decision
+## 7. Scientist decision
 - Reviewed by: ____  ·  Checks performed: ____  ·  Final assessment: ____
 
 ## Evidence detail

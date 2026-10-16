@@ -169,3 +169,21 @@ checks:
     relative_cost: high
     positive: E12
     negative: E13
+
+# Source tracing: which shared inputs or equipment deserve investigation first.
+# A shared resource is a LEAD, never proof of cause. Association strength is
+# Fisher's exact test on "used the resource" vs "contamination case", one-sided,
+# with a Bonferroni correction over all resources that have >= min_cases cases.
+source_tracing:
+  min_cases: 2                 # cases that must share a resource before it is a lead
+  alpha: 0.05                  # family-wise significance level (after Bonferroni)
+  strong_min_attack_rate: 0.5  # share of the resource's (classified) users that are cases
+  possible_min_relative_risk: 2.0  # cases must be at least this much more common among users
+  resources:                   # batch-table column -> label
+    medium_lot: medium lot
+    inoculum_lot: inoculum lot
+    bioreactor_id: bioreactor
+  resource_checks:             # suggested follow-up per resource type (draft)
+    medium lot: Test a retained sample of the medium lot (sterility / bioburden)
+    inoculum lot: Check purity of the inoculum stock (streak plate / microscopy)
+    bioreactor: Inspect and swab the bioreactor; review cleaning and sterilisation records

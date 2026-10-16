@@ -15,7 +15,7 @@ The system investigates contamination; it does not predict future contamination 
 
 ## Status
 
-Anomaly detection and diagnosis work end to end on **synthetic** α-amylase fermentation data with simulated bacterial (*E. coli*) contamination, while real MaverickX batch data is requested. Results and design decisions are in [`docs/mvp-results.md`](docs/mvp-results.md). Next: source tracing (batch genealogy) and the Streamlit dashboard. Deadline: 28 October 2026.
+Anomaly detection, diagnosis and source tracing work end to end on **synthetic** α-amylase fermentation data with simulated bacterial (*E. coli*) contamination, while real MaverickX batch data is requested. Results and design decisions are in [`docs/mvp-results.md`](docs/mvp-results.md). Next: the Streamlit investigation dashboard. Deadline: 28 October 2026.
 
 ## Running the demo
 
@@ -24,7 +24,7 @@ python -m contamination.demo                      # writes data/synthetic/ and o
 python -m contamination.robustness --seeds 11 31  # multi-seed evaluation (~4 min)
 ```
 
-The demo generates synthetic batches, validates them, fits a frozen reference on the 30 earliest (normal) batches, monitors and diagnoses the 25 later batches, evaluates against the separate outcomes table, and writes `outputs/alerts.csv`, `batch_summary.csv`, `detector_comparison.csv`, `diagnosis.csv`, `diagnosis_evaluation.csv`, `reference_profile.json`, one investigation report per flagged batch in `outputs/reports/`, and figures in `outputs/figures/`. Results on synthetic data show the software behaves as intended. They are **not** real-world detection performance.
+The demo generates synthetic batches, validates them, fits a frozen reference on the 30 earliest (normal) batches, monitors and diagnoses the 25 later batches, evaluates against the separate outcomes table, and writes `outputs/alerts.csv`, `batch_summary.csv`, `detector_comparison.csv`, `diagnosis.csv`, `diagnosis_evaluation.csv`, `batch_statuses.csv`, `source_candidates.csv`, `reference_profile.json`, one investigation report per flagged batch in `outputs/reports/`, and figures in `outputs/figures/`. Results on synthetic data show the software behaves as intended. They are **not** real-world detection performance.
 
 ## Code map
 
@@ -39,6 +39,7 @@ The demo generates synthetic batches, validates them, fits a frozen reference on
 | `alerts.py` | 4 · output | `Alert` object: evidence, persistence, corroboration, data-quality warnings, versions |
 | `diagnosis.py` | 5 · diagnostic reasoning, 3 · confidence/severity, 4 · next checks | Evidence items (present/absent/unknown), transparent hypothesis ranking, safety rule, investigation reports |
 | `knowledge/catalogue.yaml` | 5 · knowledge base | Hypotheses, evidence matrix, weights, checks: a **draft** for scientist review |
+| `tracing.py` | 2 · source tracing | Batch genealogy graph (NetworkX); candidate sources ranked by over-representation (Fisher's exact test, Bonferroni, confounding check); clusters; affected scope |
 | `robustness.py` | validation | Multi-seed evaluation of detection and diagnosis |
 | `evaluate.py` | validation | Sensitivity, specificity, precision, false alerts per batch, lead time vs today's method |
 | `plots.py` | reporting | Reference band vs observed trajectory with alerts |

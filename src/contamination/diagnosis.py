@@ -51,6 +51,7 @@ class Knowledge:
     hypotheses: dict
     checks: dict
     always_consider: dict = field(default_factory=dict)
+    source_tracing: dict = field(default_factory=dict)
 
 
 def load_knowledge(path: str | Path = CATALOGUE_PATH) -> Knowledge:
@@ -77,6 +78,7 @@ def load_knowledge(path: str | Path = CATALOGUE_PATH) -> Knowledge:
         d["hypotheses"],
         d["checks"],
         d.get("always_consider", {}),
+        d.get("source_tracing", {}),
     )
 
 
@@ -112,6 +114,7 @@ class DiagnosisReport:
     assessment: dict
     next_checks: list[dict]
     caveat: str = CAVEAT
+    sources: list[dict] = field(default_factory=list)  # filled by tracing.apply_to_reports
 
     @property
     def leading(self) -> HypothesisAssessment | None:
@@ -127,6 +130,7 @@ class DiagnosisReport:
             "hypotheses": [asdict(h) for h in self.hypotheses],
             "assessment": self.assessment,
             "next_checks": self.next_checks,
+            "sources": self.sources,
             "caveat": self.caveat,
         }
 
@@ -170,14 +174,21 @@ class DiagnosisReport:
         ]
         lines += ["", "## 4. Assessment (dimensions kept separate)"]
         lines += [f"- **{k.replace('_', ' ')}**: {v}" for k, v in self.assessment.items()]
-        lines += ["", "## 5. Recommended next checks"]
+        lines += ["", "## 5. Possible sources (leads for investigation, not proof)"]
+        if not self.sources:
+            lines.append("- Source tracing not run, or contamination not suspected for this batch.")
+        for src in self.sources:
+            lines.append(f"- **{src['resource']}** ({src['tier']}): {src['explanation']}")
+            if src.get("suggested_check"):
+                lines.append(f"  - suggested check: {src['suggested_check']}")
+        lines += ["", "## 6. Recommended next checks"]
         lines += [
             f"{i}. {c['name']} (~{c['turnaround_h']:g} h, {c['relative_cost']} cost): {c['reason']}"
             for i, c in enumerate(self.next_checks, 1)
         ] or ["- No further checks suggested."]
         lines += [
             "",
-            "## 6. Scientist decision",
+            "## 7. Scientist decision",
             "- Reviewed by: ____  ·  Checks performed: ____  ·  Final assessment: ____",
             "",
             "## Evidence detail",

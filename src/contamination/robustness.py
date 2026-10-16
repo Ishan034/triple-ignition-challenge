@@ -20,10 +20,17 @@ from pathlib import Path
 import pandas as pd
 
 from .diagnosis import diagnose
-from .evaluate import SYNTHETIC_CAVEAT, evaluate, evaluate_diagnosis, review_anchor_times
+from .evaluate import (
+    SYNTHETIC_CAVEAT,
+    evaluate,
+    evaluate_diagnosis,
+    evaluate_tracing,
+    review_anchor_times,
+)
 from .ingest import validate_measurements
 from .monitor import DEFAULT_CONFIG, fit_reference
 from .synthetic import generate_dataset
+from .tracing import batch_statuses, trace_sources
 
 REVIEW_DELAYS = (("at first alert", 0.0), ("first alert + 4 h", 4.0), ("first alert + 8 h", 8.0))
 
@@ -38,6 +45,8 @@ def run_seed(seed: int, n_reference: int = 30) -> tuple[dict, pd.DataFrame]:
 
     full = diagnose(test, reference, DEFAULT_CONFIG)
     detection = evaluate(full.monitor_result.alerts, outcomes)
+    statuses = batch_statuses(full, ordered[n_reference:], ordered[:n_reference])
+    tracing = evaluate_tracing(trace_sources(ds.batches, statuses), ds.outcomes)
     anchors = review_anchor_times(full.monitor_result.alerts, outcomes)
     tables = {}
     for label, delay in REVIEW_DELAYS:
@@ -51,7 +60,7 @@ def run_seed(seed: int, n_reference: int = 30) -> tuple[dict, pd.DataFrame]:
     tables["end of batch"] = full.table()
     diag = evaluate_diagnosis(tables, outcomes)
     diag["seed"] = seed
-    return {"seed": seed, **detection}, diag
+    return {"seed": seed, **detection, **tracing}, diag
 
 
 def run(seeds) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -96,6 +105,17 @@ def main() -> None:
         "median_lead_vs_reference_h",
     ]
     print(detection[cols].to_string(index=False), "\n")
+    print("Source tracing vs planted common source (process evidence only):")
+    tcols = [
+        "seed",
+        "planted_tier",
+        "planted_is_top_lead",
+        "false_strong_leads",
+        "n_possible_leads",
+        "planted_cases_linked",
+        "independent_cases_without_strong_lead",
+    ]
+    print(detection[tcols].to_string(index=False), "\n")
     print("Diagnosis (process evidence only), totals across seeds:")
     print(totals.to_string(index=False))
 

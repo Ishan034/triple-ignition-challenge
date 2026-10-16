@@ -24,6 +24,7 @@ from .evaluate import (
     SYNTHETIC_CAVEAT,
     compare_detectors,
     evaluate_diagnosis,
+    evaluate_tracing,
     per_batch,
     review_anchor_times,
 )
@@ -31,6 +32,7 @@ from .ingest import load_batches, load_investigations, load_measurements, load_o
 from .monitor import MonitorConfig, fit_reference, monitor
 from .plots import plot_batch
 from .synthetic import generate_dataset
+from .tracing import apply_to_reports, batch_statuses, trace_sources
 
 
 def run(data_dir: Path, out_dir: Path, seed: int, n_reference: int = 30) -> dict:
@@ -59,6 +61,13 @@ def run(data_dir: Path, out_dir: Path, seed: int, n_reference: int = 30) -> dict
     test_m = m[m["batch_id"].isin(test_ids)]
     diagnosis = diagnose(test_m, reference, config, investigations)
 
+    # Source tracing over the whole campaign (retrospective review): reference batches
+    # count as approved normal; test batches take their status from their diagnosis.
+    statuses = batch_statuses(diagnosis, test_ids, reference_ids)
+    trace = trace_sources(batches, statuses)
+    apply_to_reports(diagnosis, trace)
+    tracing_eval = evaluate_tracing(trace, outcomes)
+
     # Diagnosis evaluation on process evidence only, as of several review times.
     # Review times are anchored on the first alert at/after the simulated onset.
     first_alert = review_anchor_times(result.alerts, test_outcomes)
@@ -84,6 +93,8 @@ def run(data_dir: Path, out_dir: Path, seed: int, n_reference: int = 30) -> dict
     comparison.to_csv(out_dir / "detector_comparison.csv", index=False)
     batch_eval.to_csv(out_dir / "batch_evaluation.csv", index=False)
     diagnosis.table().to_csv(out_dir / "diagnosis.csv", index=False)
+    statuses.to_csv(out_dir / "batch_statuses.csv", index=False)
+    trace.table().to_csv(out_dir / "source_candidates.csv", index=False)
     diagnosis_eval.to_csv(out_dir / "diagnosis_evaluation.csv", index=False)
     report_dir = out_dir / "reports"
     report_dir.mkdir(exist_ok=True)
@@ -117,6 +128,8 @@ def run(data_dir: Path, out_dir: Path, seed: int, n_reference: int = 30) -> dict
         "test_outcomes": test_outcomes,
         "diagnosis": diagnosis,
         "diagnosis_eval": diagnosis_eval,
+        "trace": trace,
+        "tracing_eval": tracing_eval,
     }
 
 
@@ -144,14 +157,28 @@ def main() -> None:
     table = (
         r["diagnosis"].table().merge(r["test_outcomes"][["batch_id", "scenario"]], on="batch_id")
     )
+    t = r["trace"]
+    print("Source tracing: candidate sources (leads for investigation, not proof):")
+    tcols = [
+        "resource",
+        "tier",
+        "cases",
+        "attack_rate",
+        "attack_rate_elsewhere",
+        "relative_risk",
+        "p_adjusted",
+    ]
+    print(t.table()[tcols].head(8).round(4).to_string(index=False))
+    for i, c in enumerate(t.clusters, 1):
+        print(f"  cluster {i}: cases {', '.join(c['cases'])} linked by {', '.join(c['linked_by'])}")
+    print("  vs simulated ground truth:", r["tracing_eval"], "\n")
     print("Investigation summary (including recorded check results):")
     cols = [
         "batch_id",
         "scenario",
         "leading_explanation",
         "contamination_evidence",
-        "confidence",
-        "next_check",
+        "affected_scope",
     ]
     print(table[cols].sort_values("scenario").to_string(index=False))
     print(f"\nOutputs written to {args.out}/")
