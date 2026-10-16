@@ -22,6 +22,10 @@ Scenarios (each batch's ground truth is written to the separate outcomes table):
 Some batches also get a gap of missing online readings (``quality_flag="missing"``,
 ``value`` NaN); missing values are never filled with zero.
 
+A few simulated follow-up check results are written to ``investigations.csv``
+(e.g. a positive microscopy result on two contaminated batches) to demonstrate how
+independent evidence changes an assessment.
+
 Genealogy: most contaminated batches share medium lot ``M-12``, a planted common
 source for testing source tracing later. This is recorded in the outcomes table.
 """
@@ -33,7 +37,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from .schema import MEASUREMENT_COLUMNS, VARIABLES
+from .schema import INVESTIGATION_COLUMNS, MEASUREMENT_COLUMNS, VARIABLES
 
 DURATION_H = 48
 # variable -> (sampling interval h, result availability delay h, source)
@@ -60,6 +64,7 @@ class SyntheticDataset:
     measurements: pd.DataFrame
     outcomes: pd.DataFrame
     batches: pd.DataFrame
+    investigations: pd.DataFrame
 
     def save(self, directory) -> None:
         from pathlib import Path
@@ -69,6 +74,7 @@ class SyntheticDataset:
         self.measurements.to_csv(path / "measurements.csv", index=False)
         self.outcomes.to_csv(path / "outcomes.csv", index=False)
         self.batches.to_csv(path / "batches.csv", index=False)
+        self.investigations.to_csv(path / "investigations.csv", index=False)
 
 
 def _logistic(t: np.ndarray, x0: float, xmax: float, mu: float, lag: float) -> np.ndarray:
@@ -186,7 +192,7 @@ def _batch_rows(rng, batch_id, start, scenario, missing_gap: bool) -> tuple[list
                 flag, value = "missing", np.nan
             observation = None
             if (
-                variable == "biomass_od600"
+                variable == "ph"  # hourly, so every observation time has a row
                 and info["observation_h"] is not None
                 and h == info["observation_h"]
             ):
@@ -289,4 +295,43 @@ def generate_dataset(
         )
 
     measurements = pd.DataFrame(all_rows, columns=MEASUREMENT_COLUMNS)
-    return SyntheticDataset(measurements, pd.DataFrame(outcomes), pd.DataFrame(batches))
+    outcomes_df = pd.DataFrame(outcomes)
+    return SyntheticDataset(
+        measurements, outcomes_df, pd.DataFrame(batches), _investigations(outcomes_df, n_reference)
+    )
+
+
+def _investigations(outcomes: pd.DataFrame, n_reference: int) -> pd.DataFrame:
+    """A few simulated follow-up check results, so the demo can show how independent
+    evidence changes an assessment. Test batches only; most batches get none."""
+    test = outcomes.iloc[n_reference:]
+    rows = []
+
+    def first(scenario: str, k: int = 1):
+        return test[test["scenario"] == scenario].head(k).itertuples()
+
+    for o in first("contamination", 2):  # sample taken when the visual note was made
+        rows.append(
+            [
+                o.batch_id,
+                "T01",
+                "positive",
+                o.reference_event_h + 1.0,
+                "simulated: foreign rod-shaped cells seen",
+            ]
+        )
+    for o in first("do_probe_drift"):
+        rows.append(
+            [
+                o.batch_id,
+                "T02",
+                "positive",
+                o.onset_h + 10.0,
+                "simulated: probe reads low vs handheld meter",
+            ]
+        )
+    for o in first("slow_growth"):
+        rows.append(
+            [o.batch_id, "T01", "negative", 30.0, "simulated: only production organism seen"]
+        )
+    return pd.DataFrame(rows, columns=INVESTIGATION_COLUMNS)

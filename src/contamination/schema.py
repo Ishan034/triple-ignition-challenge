@@ -87,6 +87,21 @@ OUTCOME_SCHEMA = pa.DataFrameSchema(
     strict=False,
 )
 
+# Scientist-recorded follow-up checks. `recorded_h` is elapsed batch time when the
+# result became available; check_id refers to knowledge/catalogue.yaml.
+INVESTIGATION_COLUMNS = ["batch_id", "check_id", "result", "recorded_h", "note"]
+INVESTIGATION_SCHEMA = pa.DataFrameSchema(
+    {
+        "batch_id": pa.Column(str),
+        "check_id": pa.Column(str),
+        "result": pa.Column(str, pa.Check.isin(("positive", "negative", "inconclusive"))),
+        "recorded_h": pa.Column(float),
+        "note": pa.Column(str, nullable=True),
+    },
+    coerce=True,
+    strict=False,
+)
+
 BATCH_SCHEMA = pa.DataFrameSchema(
     {
         "batch_id": pa.Column(str, unique=True),

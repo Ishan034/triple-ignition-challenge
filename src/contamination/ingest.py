@@ -23,6 +23,7 @@ import pandas as pd
 
 from .schema import (
     BATCH_SCHEMA,
+    INVESTIGATION_SCHEMA,
     MEASUREMENT_SCHEMA,
     OUTCOME_SCHEMA,
     QUALITY_FLAGS,
@@ -134,6 +135,11 @@ def load_outcomes(path: str | Path) -> pd.DataFrame:
 
 def load_batches(path: str | Path) -> pd.DataFrame:
     return BATCH_SCHEMA.validate(pd.read_csv(path, parse_dates=["start_time"]))
+
+
+def load_investigations(path: str | Path) -> pd.DataFrame:
+    """Scientist-recorded check results (independent evidence for diagnosis)."""
+    return INVESTIGATION_SCHEMA.validate(pd.read_csv(path, dtype={"note": "object"}))
 
 
 def valid_values(measurements: pd.DataFrame) -> pd.DataFrame:

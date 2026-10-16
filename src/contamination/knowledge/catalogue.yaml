@@ -1,0 +1,171 @@
+# Diagnostic knowledge for the contamination decision-support prototype.
+#
+# STATUS: PROTOTYPE DRAFT. Every hypothesis, evidence link, weight and check below
+# was written by the student team for the synthetic alpha-amylase proxy process.
+# None of it has been reviewed or validated by MaverickX scientists. It must be
+# reviewed before it is used on real batches. Edit this file, not the code.
+#
+# Evidence states: present | absent | unknown (not enough data to tell).
+# Missing information is never treated as negative evidence.
+# `leading_requires_any`: a hypothesis can only be the *leading* explanation if at
+# least one of these specific items is present; non-specific evidence alone (e.g.
+# "several signals deviate") can make it "possible" but never "leading".
+# Link weights: 1 = weak, 2 = moderate, 3 = strong. A hypothesis's score is
+# (sum of supporting weights that are present) - (sum of contradicting weights
+# that are present). It ranks explanations for review; it is NOT a probability.
+
+review_status: "draft - requires MaverickX scientist review"
+
+parameters:
+  leading_min_score: 2        # a single weak item (weight 1) cannot make an explanation "leading"
+  deviation_z: 3.0            # |robust z| counted as clearly outside the reference
+  linked_in_range_z: 3.0      # |z| under which a linked signal counts as "not deviating"
+  multi_signal_min_variables: 3
+  decoupled_min_fraction: 0.8 # share of the alert window where linked signals stay normal
+  decoupled_min_duration_h: 6 # a lone deviation must last this long before it counts as decoupled
+  shift_search_h: [-4, 12]    # time shifts tried when testing for a delayed trajectory
+  shift_min_h: 3              # smallest shift that counts as "delayed" (beyond normal lag variation)
+  shift_max_residual: 2.0     # median |z| after shifting must fall below this
+  shift_min_improvement: 1.0  # ...and improve on the unshifted fit by at least this
+  shift_min_points: 4         # growth-phase OD readings needed (fit uses 10-90% of final biomass)
+  growth_phase_fraction: [0.1, 0.9]
+  product_phase_min_activity: 20.0  # reference activity (U/mL) above which activity is assessable
+
+evidence:
+  E01:
+    name: Several signals deviate together
+    description: ">= 3 process variables (excluding temperature) show persistent alerts."
+  E02:
+    name: Only one signal deviates
+    description: All alerts are on a single variable.
+  E03:
+    name: Isolated reading(s) that return to normal
+    description: Threshold alerts are single readings and the variable is back within the reference afterwards.
+  E04:
+    name: Trajectory is delayed but otherwise normal
+    description: The biomass curve matches the reference when shifted later in time (slow start / slow growth).
+  E05:
+    name: Biomass / turbidity above reference
+    description: Persistent high alert on OD600 (extra cells or particles in the broth).
+  E06:
+    name: Low enzyme activity for the amount of biomass
+    description: Activity clearly below reference while biomass is at or above reference.
+  E07:
+    name: Culture more acidic than expected
+    description: Persistent low alert on pH.
+  E08:
+    name: Extra oxygen demand with high biomass
+    description: Dissolved oxygen clearly below reference at times when biomass is above reference.
+  E09:
+    name: Deviating signal is decoupled from linked signals
+    description: A variable deviates while physically linked variables (OD600, pH, DO) stay normal.
+  E10:
+    name: Visual / odour observation recorded
+    description: A scientist recorded an unusual observation for this batch.
+  E11:
+    name: Data-quality problems near the alerts
+    description: Missing or suspect readings within the alert windows.
+  E12:
+    name: Confirmatory test positive
+    description: An independent test (e.g. plating, qPCR, microscopy) recorded a positive result.
+    independent: true
+  E13:
+    name: Confirmatory test negative
+    description: An independent test recorded a negative result.
+    independent: true
+  E14:
+    name: Process condition deviation
+    description: Persistent alert on a controlled condition (temperature).
+  E15:
+    name: Instrument check found a fault
+    description: A probe/instrument check recorded a fault (e.g. reading disagrees with an offline measurement).
+    independent: true
+  E16:
+    name: Instrument check found no fault
+    description: A probe/instrument check agreed with the online reading.
+    independent: true
+
+hypotheses:
+  H01:
+    name: Biological contamination
+    description: An unwanted organism is growing in the culture.
+    # E01 and E06 are weak here: any process difference can cause them. The
+    # contamination-specific items are E05, E08 (and E07) plus independent tests.
+    supports: {E01: 1, E05: 2, E06: 1, E07: 1, E08: 2, E10: 1, E12: 3}
+    leading_requires_any: [E05, E08, E10, E12]
+    contradicts: {E03: 2, E04: 2, E09: 2, E13: 3}
+  H02:
+    name: Expected process variation (delayed / slow growth)
+    description: The production organism is growing more slowly or starting later, e.g. inoculum age.
+    supports: {E04: 3}
+    leading_requires_any: [E04]
+    contradicts: {E05: 2, E06: 1, E08: 1, E10: 1, E12: 3}
+  H03:
+    name: Raw-material or process-condition change
+    description: A change in medium, feed or setpoints is altering the culture.
+    supports: {E01: 1, E14: 2}
+    leading_requires_any: [E14]
+    contradicts: {E03: 1, E09: 1, E12: 2}
+  H04:
+    name: Measurement or equipment fault
+    description: A sensor, probe or sampling problem, not a change in the culture.
+    supports: {E02: 1, E03: 3, E09: 3, E11: 1, E15: 3}
+    leading_requires_any: [E03, E09, E15]
+    contradicts: {E01: 3, E10: 1, E12: 2, E16: 3}
+  H05:
+    name: Unresolved / previously unseen cause
+    description: The evidence does not clearly support any catalogued explanation.
+    supports: {}
+    contradicts: {}
+
+# Safety rule: missing contamination is the costly error. While a hypothesis listed
+# here scores at least `min_score` and no independent test has ruled it out, the
+# next-check recommendation always includes a check that is informative about it.
+always_consider:
+  H01: {min_score: 0, ruled_out_by: E13}
+
+# Follow-up checks. Turnaround and relative cost are rough placeholders for
+# ranking only; replace them with MaverickX's actual methods and figures.
+# `positive` / `negative` name the evidence item that a recorded result of that check
+# produces. Checks without them (screens, record reviews) inform the scientist but do
+# not change the evidence automatically.
+checks:
+  T01:
+    name: Microscopy / Gram stain of a broth sample
+    discriminates: [H01, H02, H03]
+    turnaround_h: 1
+    relative_cost: low
+    positive: E12
+    negative: E13
+  T02:
+    name: Check the probe against an offline / handheld measurement
+    discriminates: [H04]
+    turnaround_h: 0.5
+    relative_cost: low
+    positive: E15
+    negative: E16
+  T03:
+    name: Review batch record (inoculum age, medium lot, setpoints, operator notes)
+    discriminates: [H02, H03]
+    turnaround_h: 0.5
+    relative_cost: low
+  T04:
+    name: ATP bioluminescence against the stage baseline (screen only)
+    discriminates: [H01]
+    turnaround_h: 0.25
+    relative_cost: low
+    screen: true  # not suggested once the hypothesis is confirmed independently
+  T05:
+    name: Plate count on selective medium
+    discriminates: [H01]
+    turnaround_h: 36
+    relative_cost: low
+    positive: E12
+    negative: E13
+  T06:
+    name: Targeted qPCR for a suspected contaminant
+    discriminates: [H01]
+    turnaround_h: 4
+    relative_cost: high
+    positive: E12
+    negative: E13

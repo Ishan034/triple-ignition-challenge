@@ -1,0 +1,5 @@
+batch_id,check_id,result,recorded_h,note
+B031,T01,positive,32.0,simulated: foreign rod-shaped cells seen
+B035,T01,positive,33.0,simulated: foreign rod-shaped cells seen
+B044,T02,positive,26.0,simulated: probe reads low vs handheld meter
+B036,T01,negative,30.0,simulated: only production organism seen

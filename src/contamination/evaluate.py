@@ -96,3 +96,57 @@ def compare_detectors(alerts: list[Alert], outcomes: pd.DataFrame, detector_name
     rows = [evaluate(alerts, outcomes, {d}) for d in detector_names]
     rows.append(evaluate(alerts, outcomes, None))
     return pd.DataFrame(rows)
+
+
+# Expected leading explanation for each synthetic scenario (diagnosis evaluation only).
+EXPECTED_HYPOTHESIS = {
+    "contamination": "H01",
+    "slow_growth": "H02",
+    "sensor_spike": "H04",
+    "do_probe_drift": "H04",
+}
+
+
+def evaluate_diagnosis(
+    diagnosis_tables: dict[str, pd.DataFrame], outcomes: pd.DataFrame
+) -> pd.DataFrame:
+    """Compare the leading explanation with the known scenario at several review times.
+
+    ``diagnosis_tables`` maps a label (e.g. "at first alert", "end of batch") to a
+    DiagnosisResult.table(). "unresolved" (no explanation strong enough to lead) is the
+    safe failure: the scientist is asked to investigate more broadly. "wrong_leading"
+    is the harmful one: it points the investigation the wrong way.
+    """
+    rows = []
+    for label, table in diagnosis_tables.items():
+        merged = outcomes.merge(table, on="batch_id", how="inner")
+        merged = merged[merged["scenario"].isin(EXPECTED_HYPOTHESIS)]
+        for scenario, g in merged.groupby("scenario"):
+            expected = EXPECTED_HYPOTHESIS[scenario]
+            rows.append(
+                {
+                    "review_time": label,
+                    "scenario": scenario,
+                    "expected": expected,
+                    "batches": len(g),
+                    "matched": int((g["leading_id"] == expected).sum()),
+                    "unresolved": int(g["leading_id"].isin(["", "H05"]).sum()),
+                    "wrong_leading": int((~g["leading_id"].isin([expected, "", "H05"])).sum()),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def review_anchor_times(alerts: list[Alert], outcomes: pd.DataFrame) -> dict[str, float]:
+    """First alert time per batch to anchor review times on.
+
+    For batches with a known onset this is the first alert raised at or after the onset;
+    earlier alerts are unrelated noise and are evaluated as false alerts instead.
+    """
+    out = {}
+    for o in outcomes.itertuples(index=False):
+        onset = None if pd.isna(o.onset_h) else float(o.onset_h)
+        t = _first_alert(alerts, o.batch_id, onset)
+        if np.isfinite(t):
+            out[o.batch_id] = t
+    return out
