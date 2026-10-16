@@ -15,7 +15,21 @@ The system investigates contamination; it does not predict future contamination 
 
 ## Status
 
-Anomaly detection, diagnosis and source tracing work end to end on **synthetic** α-amylase fermentation data with simulated bacterial (*E. coli*) contamination, while real MaverickX batch data is requested. Results and design decisions are in [`docs/mvp-results.md`](docs/mvp-results.md). Next: the Streamlit investigation dashboard. Deadline: 28 October 2026.
+The MVP works end to end on **synthetic** α-amylase fermentation data with simulated bacterial (*E. coli*) contamination: anomaly detection, diagnosis, source tracing and an investigation dashboard. Real MaverickX batch data has been requested. Results and design decisions are in [`docs/mvp-results.md`](docs/mvp-results.md). Deadline: 28 October 2026.
+
+## Investigation dashboard
+
+```bash
+python -m contamination.demo        # once, to generate data/synthetic/
+streamlit run app/dashboard.py      # opens http://localhost:8501
+```
+
+- **Campaign overview**: every monitored batch with its status, process deviation, leading explanation, contamination evidence and affected scope.
+- **Batch investigation**: signal timelines against the reference band with alerts; a **replay** slider that shows what the system knew at any hour; ranked explanations, evidence, next checks and possible sources; a form to **record check results** (the assessment updates immediately); a downloadable report.
+- **Source tracing**: a genealogy graph of contamination cases and the resources linking them, clusters, and the full candidate table.
+- **How it works**: a plain-language explanation and the system's limits.
+
+A "Show simulated ground truth" toggle (synthetic data only) shows the known answers for evaluation. The model never sees them.
 
 ## Running the demo
 
@@ -42,9 +56,11 @@ The demo generates synthetic batches, validates them, fits a frozen reference on
 | `tracing.py` | 2 · source tracing | Batch genealogy graph (NetworkX); candidate sources ranked by over-representation (Fisher's exact test, Bonferroni, confounding check); clusters; affected scope |
 | `robustness.py` | validation | Multi-seed evaluation of detection and diagnosis |
 | `evaluate.py` | validation | Sensitivity, specificity, precision, false alerts per batch, lead time vs today's method |
+| `pipeline.py` | orchestration | Load a campaign folder; run detection → diagnosis → tracing; per-batch replay |
+| `app/dashboard.py` | 6 · decision support | Streamlit investigation dashboard |
 | `plots.py` | reporting | Reference band vs observed trajectory with alerts |
 
-## Planned structure
+## Structure
 
 ```
 data/        Synthetic and (later) authorised batch data
@@ -55,9 +71,9 @@ tests/       pytest suite
 docs/        Project context and technical notes
 ```
 
-## Planned stack
+## Stack
 
-Python, pandas, NumPy/SciPy, scikit-learn, Streamlit, Plotly, NetworkX, pytest.
+Python, pandas, NumPy/SciPy, pandera, scikit-learn (comparison only), NetworkX, PyYAML, Streamlit, Plotly, Matplotlib, pytest, ruff.
 
 ## Getting started
 

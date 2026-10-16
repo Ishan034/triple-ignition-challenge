@@ -686,7 +686,8 @@ def diagnose(
     summary = result.summary.set_index("batch_id")
 
     reports = {}
-    batches = sorted({a.batch_id for a in result.alerts} | set(inv["batch_id"]))
+    present = set(measurements["batch_id"])
+    batches = sorted({a.batch_id for a in result.alerts} | (set(inv["batch_id"]) & present))
     for b in batches:
         alerts = [a for a in result.alerts if a.batch_id == b]
         evidence = compute_evidence(b, result.scores, alerts, measurements, inv, reference, kb)

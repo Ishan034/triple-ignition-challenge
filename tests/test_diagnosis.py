@@ -177,3 +177,11 @@ def test_report_markdown_sections(setup):
         "Scientist decision",
     ):
         assert heading.lower() in text.lower()
+
+
+def test_investigations_for_other_batches_are_ignored(setup):
+    ds, test, reference, _ = setup
+    b, other = _scenario_batches(ds, "contamination")[:2]
+    inv = _inv([[other, "T01", "positive", 30.0, None]])
+    reports = diagnose(test[test["batch_id"] == b], reference, investigations=inv).reports
+    assert set(reports) == {b}
