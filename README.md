@@ -34,7 +34,17 @@ Python, pandas, NumPy/SciPy, scikit-learn, Streamlit, Plotly, NetworkX, pytest.
 
 ## Getting started
 
-Setup instructions will be added once the first code lands.
+Requires Python 3.11+.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements.lock   # exact pinned versions
+pip install -e ".[dev]"            # installs the project package
+pytest                             # run tests
+```
+
+Dependencies are declared in `pyproject.toml`; `requirements.lock` pins the versions the team uses.
 
 ## Contributors
 

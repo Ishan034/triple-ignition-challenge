@@ -1,0 +1,37 @@
+[project]
+name = "contamination"
+version = "0.1.0"
+description = "Contamination monitoring and diagnosis decision support for MaverickX enzyme production"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.2",
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "pandera>=0.20",
+    "scikit-learn>=1.5",
+    "networkx>=3.3",
+    "pyyaml>=6.0",
+    "streamlit>=1.38",
+    "plotly>=5.22",
+    "matplotlib>=3.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "jupyterlab>=4.2",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
