@@ -31,6 +31,10 @@ streamlit run app/dashboard.py      # opens http://localhost:8501
 
 A "Show simulated ground truth" toggle (synthetic data only) shows the known answers for evaluation. The model never sees them.
 
+### Deploying (Streamlit Community Cloud)
+
+On [share.streamlit.io](https://share.streamlit.io), create an app from this repo: branch `main`, main file `app/dashboard.py`, Python 3.13 (under Advanced settings). Dependencies come from `requirements.txt`, and the simulated campaign in `data/synthetic/` is committed, so nothing else is needed. Set sharing to invite-only to keep it to the team.
+
 ## Running the demo
 
 ```bash
