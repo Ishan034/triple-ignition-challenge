@@ -16,6 +16,15 @@
 
 review_status: "draft - requires MaverickX scientist review"
 
+# Which measured variable plays each role in the evidence rules. Another process
+# (e.g. penicillin in IndPenSim) reuses the same rules by mapping its own variables.
+roles:
+  biomass: biomass_od600
+  oxygen: dissolved_oxygen
+  ph: ph
+  product: enzyme_activity
+  temperature: temperature
+
 parameters:
   leading_min_score: 2        # a single weak item (weight 1) cannot make an explanation "leading"
   deviation_z: 3.0            # |robust z| counted as clearly outside the reference

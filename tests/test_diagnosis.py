@@ -185,3 +185,12 @@ def test_investigations_for_other_batches_are_ignored(setup):
     inv = _inv([[other, "T01", "positive", 30.0, None]])
     reports = diagnose(test[test["batch_id"] == b], reference, investigations=inv).reports
     assert set(reports) == {b}
+
+
+def test_knowledge_base_requires_all_roles(tmp_path):
+    d = yaml.safe_load(CATALOGUE_PATH.read_text())
+    del d["roles"]["oxygen"]
+    bad = tmp_path / "bad_roles.yaml"
+    bad.write_text(yaml.safe_dump(d))
+    with pytest.raises(ValueError, match="roles"):
+        load_knowledge(bad)

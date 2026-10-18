@@ -34,7 +34,9 @@ from .reference import ReferenceProfile
 from .schema import INVESTIGATION_COLUMNS
 
 CATALOGUE_PATH = Path(__file__).parent / "knowledge" / "catalogue.yaml"
-LINKED = ("ph", "dissolved_oxygen", "biomass_od600")
+# Process roles the evidence rules refer to; each catalogue maps them to its own
+# variable names (e.g. biomass -> biomass_od600 for the alpha-amylase proxy).
+ROLES = ("biomass", "oxygen", "ph", "product", "temperature")
 COST_RANK = {"low": 0, "medium": 1, "high": 2}
 CAVEAT = (
     "Decision support only. Rankings order explanations for scientist review. They are "
@@ -52,6 +54,12 @@ class Knowledge:
     checks: dict
     always_consider: dict = field(default_factory=dict)
     source_tracing: dict = field(default_factory=dict)
+    roles: dict = field(default_factory=dict)
+
+    @property
+    def linked(self) -> tuple[str, ...]:
+        """Variables expected to move together in a real culture change."""
+        return (self.roles["ph"], self.roles["oxygen"], self.roles["biomass"])
 
 
 def load_knowledge(path: str | Path = CATALOGUE_PATH) -> Knowledge:
@@ -71,6 +79,10 @@ def load_knowledge(path: str | Path = CATALOGUE_PATH) -> Knowledge:
         for res in ("positive", "negative"):
             if res in c and c[res] not in known:
                 raise ValueError(f"{cid} {res} result maps to undefined evidence {c[res]}")
+    roles = d.get("roles", {})
+    missing = set(ROLES) - set(roles)
+    if missing:
+        raise ValueError(f"catalogue roles missing: {sorted(missing)}")
     return Knowledge(
         d["review_status"],
         d["parameters"],
@@ -79,6 +91,7 @@ def load_knowledge(path: str | Path = CATALOGUE_PATH) -> Knowledge:
         d["checks"],
         d.get("always_consider", {}),
         d.get("source_tracing", {}),
+        roles,
     )
 
 
@@ -249,9 +262,9 @@ def _shifted_z(
 
 
 def _delayed_trajectory(
-    od: pd.DataFrame, reference: ReferenceProfile, p: dict
+    od: pd.DataFrame, reference: ReferenceProfile, p: dict, biomass_var: str
 ) -> tuple[str, str, float]:
-    ref = reference.stats[reference.stats["variable"] == "biomass_od600"].sort_values("hour")
+    ref = reference.stats[reference.stats["variable"] == biomass_var].sort_values("hour")
     hours, med, scale = ref["hour"].to_numpy(), ref["median"].to_numpy(), ref["scale"].to_numpy()
     # Fit timing on the growth phase only; the stationary phase says little about delay.
     lo_f, hi_f = p["growth_phase_fraction"]
@@ -290,15 +303,17 @@ def _delayed_trajectory(
     return ("present" if present else "absent"), detail, float(shifts[best]) if present else 0.0
 
 
-def _decoupled(s: pd.DataFrame, alerts: list[Alert], p: dict) -> tuple[str, str]:
+def _decoupled(
+    s: pd.DataFrame, alerts: list[Alert], p: dict, linked: tuple[str, ...]
+) -> tuple[str, str]:
     found, too_early = [], []
-    for var in LINKED:
+    for var in linked:
         windows = [(a.start_h, a.end_h) for a in alerts if a.variable == var]
         if not windows:
             continue
         duration = max(b for _, b in windows) - min(a for a, _ in windows)
         ok_all = True
-        for other in LINKED:
+        for other in linked:
             if other == var:
                 continue
             o = _var(s, other)
@@ -386,17 +401,15 @@ def compute_evidence(
     kb: Knowledge,
 ) -> dict[str, EvidenceItem]:
     p = kb.parameters
+    r = kb.roles
     dz = p["deviation_z"]
     s = scores[scores["batch_id"] == batch_id]
     persistent = {a.variable for a in alerts if a.persistence == "persistent"}
     alerted = {a.variable for a in alerts}
-    has = {
-        v: bool(len(_var(s, v)))
-        for v in ("ph", "dissolved_oxygen", "biomass_od600", "enzyme_activity", "temperature")
-    }
+    has = {r[role]: bool(len(_var(s, r[role]))) for role in ROLES}
     out: dict[str, tuple[str, str]] = {}
 
-    multi = sorted(persistent - {"temperature"})
+    multi = sorted(persistent - {r["temperature"]})
     out["E01"] = (
         "present" if len(multi) >= p["multi_signal_min_variables"] else "absent",
         f"Persistent alerts on: {', '.join(multi) or 'none'}.",
@@ -421,7 +434,7 @@ def compute_evidence(
             else "No threshold alerts.",
         )
 
-    *out["E04"], delay_h = _delayed_trajectory(_var(s, "biomass_od600"), reference, p)
+    *out["E04"], delay_h = _delayed_trajectory(_var(s, r["biomass"]), reference, p, r["biomass"])
     out["E04"] = tuple(out["E04"])
 
     def persistent_dir(var: str, direction: str, eid: str, what: str) -> None:
@@ -440,13 +453,13 @@ def compute_evidence(
             else f"No persistent {direction} alert on {var}.",
         )
 
-    persistent_dir("biomass_od600", "high", "E05", "OD600 above reference")
+    persistent_dir(r["biomass"], "high", "E05", "Biomass above reference")
 
     # If the whole trajectory is delayed, judge activity and biomass against the
     # time-shifted reference, so late product formation is not mistaken for low activity.
-    act = _shifted_z(_var(s, "enzyme_activity"), reference, "enzyme_activity", delay_h)
+    act = _shifted_z(_var(s, r["product"]), reference, r["product"], delay_h)
     act = act[act["ref_median"] >= p["product_phase_min_activity"]]
-    od = _shifted_z(_var(s, "biomass_od600"), reference, "biomass_od600", delay_h)
+    od = _shifted_z(_var(s, r["biomass"]), reference, r["biomass"], delay_h)
     if not len(act):
         out["E06"] = ("unknown", "No enzyme-activity results from the product-forming phase yet.")
     else:
@@ -467,9 +480,9 @@ def compute_evidence(
                 out["E06"][1] + f" (compared with reference shifted {delay_h:+g} h)",
             )
 
-    persistent_dir("ph", "low", "E07", "pH below reference")
+    persistent_dir(r["ph"], "low", "E07", "pH below reference")
 
-    do = _var(s, "dissolved_oxygen")
+    do = _var(s, r["oxygen"])
     if not len(do) or not len(od):
         out["E08"] = ("unknown", "Needs both DO and OD600 readings.")
     else:
@@ -483,7 +496,7 @@ def compute_evidence(
             f"DO low while OD600 high at {len(hits)} reading(s).",
         )
 
-    out["E09"] = _decoupled(s, alerts, p)
+    out["E09"] = _decoupled(s, alerts, p, kb.linked)
 
     m = measurements[measurements["batch_id"] == batch_id]
     notes = m[m["observation"].notna() & (m["observation"].astype(str).str.strip() != "")]
@@ -501,9 +514,9 @@ def compute_evidence(
 
     out.update(_investigation_evidence(investigations, batch_id, kb))
 
-    persistent_dir("temperature", "high", "E14", "Temperature above reference")
-    if out["E14"][0] == "absent" and has["temperature"]:
-        persistent_dir("temperature", "low", "E14", "Temperature below reference")
+    persistent_dir(r["temperature"], "high", "E14", "Temperature above reference")
+    if out["E14"][0] == "absent" and has[r["temperature"]]:
+        persistent_dir(r["temperature"], "low", "E14", "Temperature below reference")
 
     return {
         eid: EvidenceItem(
@@ -638,17 +651,16 @@ def _assessment(batch_id, hyps, evidence, alerts, summary_row, scores, kb) -> di
         cont = "independent test negative"
     else:
         cont = "unconfirmed (no contamination test recorded)"
-    act = scores[(scores["batch_id"] == batch_id) & (scores["variable"] == "enzyme_activity")]
+    product = kb.roles["product"]
+    act = scores[(scores["batch_id"] == batch_id) & (scores["variable"] == product)]
     act = act[act["ref_median"] >= kb.parameters["product_phase_min_activity"]]
     low_act = [
         a
         for a in alerts
-        if a.variable == "enzyme_activity"
-        and a.direction == "low"
-        and a.persistence == "persistent"
+        if a.variable == product and a.direction == "low" and a.persistence == "persistent"
     ]
     if low_act:
-        quality = f"deviation established (enzyme activity below reference from {min(a.start_h for a in low_act):g} h)"
+        quality = f"deviation established ({product} below reference from {min(a.start_h for a in low_act):g} h)"
     elif len(act):
         quality = "no deviation established"
     else:
