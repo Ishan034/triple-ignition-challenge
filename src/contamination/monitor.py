@@ -65,6 +65,11 @@ def score(
     data["ref_scale"] = ref["scale"]
     data["ref_n_batches"] = ref["n_batches"]
     data["z"] = (data["value"] - data["ref_median"]) / data["ref_scale"]
+    # Where too few reference batches cover this hour (e.g. a batch running longer than
+    # almost all approved batches), there is no meaningful "normal" to compare with:
+    # no score, so no alert. The batch summary reports the coverage gap instead.
+    data["beyond_reference"] = data["ref_n_batches"].fillna(0) < config.min_reference_batches
+    data.loc[data["beyond_reference"], "z"] = np.nan
 
     stat_cols = {d: np.full(len(data), np.nan) for d in DETECTORS}
     positions = np.arange(len(data))
@@ -163,7 +168,9 @@ def monitor(
                         batch_id=batch_id,
                         variable=variable,
                         detector=d,
-                        stage=str(window.iloc[0]["stage"]),
+                        stage=""
+                        if pd.isna(window.iloc[0]["stage"])
+                        else str(window.iloc[0]["stage"]),
                         start_h=float(window.iloc[0]["elapsed_h"]),
                         end_h=float(window.iloc[-1]["elapsed_h"]),
                         first_raised_h=float(window.iloc[0]["available_h"]),
@@ -253,6 +260,9 @@ def summarise(
                 if s["z"].notna().any()
                 else np.nan,
                 "non_valid_readings": int((m["quality_flag"] != "valid").sum()),
+                "beyond_reference_from_h": float(s.loc[s["beyond_reference"], "elapsed_h"].min())
+                if s["beyond_reference"].any()
+                else np.nan,
                 "contamination_evidence": NO_EVIDENCE,
             }
         )

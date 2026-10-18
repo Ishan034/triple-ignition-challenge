@@ -1,8 +1,9 @@
 """Campaign-level pipeline used by the dashboard: load data, then detect, diagnose, trace.
 
 A *campaign* is a folder with ``measurements.csv`` and ``batches.csv``, plus
-optional ``investigations.csv`` (recorded check results) and ``outcomes.csv``
-(known answers, used only for evaluation and never by the model).
+optional ``investigations.csv`` (recorded check results), ``outcomes.csv`` (known
+answers, used only for evaluation and never by the model) and ``profile.yaml`` (a
+process profile adapting the rule book's roles to this process's variables).
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .diagnosis import DiagnosisResult, diagnose
+from .diagnosis import DiagnosisResult, Knowledge, diagnose, load_knowledge
 from .ingest import (
     IngestResult,
     load_batches,
@@ -34,20 +35,24 @@ class Campaign:
     outcomes: pd.DataFrame | None
     reference_ids: list[str]
     monitored_ids: list[str]
+    kb: Knowledge
 
     @property
     def measurements(self) -> pd.DataFrame:
         return self.ingest.measurements
 
 
-def load_campaign(data_dir: str | Path, n_reference: int = 30) -> Campaign:
-    """Load a campaign; the earliest ``n_reference`` batches form the approved reference.
-
-    With real data, replace the chronological rule with the batches scientists approve.
+def load_campaign(
+    data_dir: str | Path, n_reference: int = 30, reference_ids: list[str] | None = None
+) -> Campaign:
+    """Load a campaign. ``reference_ids`` are the batches approved as normal; without
+    them, the earliest ``n_reference`` batches are used (the synthetic demo's rule).
     """
     d = Path(data_dir)
-    ingest = load_measurements(d / "measurements.csv")
     batches = load_batches(d / "batches.csv")
+    ingest = load_measurements(
+        d / "measurements.csv", batches.set_index("batch_id")["start_time"].to_dict()
+    )
     inv_path, out_path = d / "investigations.csv", d / "outcomes.csv"
     investigations = (
         load_investigations(inv_path)
@@ -56,9 +61,15 @@ def load_campaign(data_dir: str | Path, n_reference: int = 30) -> Campaign:
     )
     outcomes = load_outcomes(out_path) if out_path.exists() else None
     ordered = batches.sort_values("start_time")["batch_id"].tolist()
-    return Campaign(
-        ingest, batches, investigations, outcomes, ordered[:n_reference], ordered[n_reference:]
-    )
+    if reference_ids is None:
+        reference_ids = ordered[:n_reference]
+    unknown = set(reference_ids) - set(ordered)
+    if unknown:
+        raise ValueError(f"reference batches not in campaign: {sorted(unknown)}")
+    monitored = [b for b in ordered if b not in set(reference_ids)]
+    profile = d / "profile.yaml"
+    kb = load_knowledge(profile=profile) if profile.exists() else load_knowledge()
+    return Campaign(ingest, batches, investigations, outcomes, list(reference_ids), monitored, kb)
 
 
 def fit(campaign: Campaign, config: MonitorConfig = DEFAULT_CONFIG) -> ReferenceProfile:
@@ -106,9 +117,11 @@ def run_campaign(
 ) -> CampaignResult:
     inv = campaign.investigations if investigations is None else investigations
     m = campaign.measurements
-    diagnosis = diagnose(m[m["batch_id"].isin(campaign.monitored_ids)], reference, config, inv)
+    diagnosis = diagnose(
+        m[m["batch_id"].isin(campaign.monitored_ids)], reference, config, inv, kb=campaign.kb
+    )
     statuses = batch_statuses(diagnosis, campaign.monitored_ids, campaign.reference_ids)
-    trace = trace_sources(campaign.batches, statuses)
+    trace = trace_sources(campaign.batches, statuses, kb=campaign.kb)
     apply_to_reports(diagnosis, trace)
     return CampaignResult(diagnosis, statuses, trace)
 
@@ -124,5 +137,10 @@ def diagnose_batch_as_of(
     """Replay one batch: only results available by ``as_of_h`` are used."""
     m = campaign.measurements
     return diagnose(
-        m[m["batch_id"] == batch_id], reference, config, investigations, as_of_h=as_of_h
+        m[m["batch_id"] == batch_id],
+        reference,
+        config,
+        investigations,
+        as_of_h=as_of_h,
+        kb=campaign.kb,
     )

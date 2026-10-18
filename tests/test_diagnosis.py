@@ -194,3 +194,16 @@ def test_knowledge_base_requires_all_roles(tmp_path):
     bad.write_text(yaml.safe_dump(d))
     with pytest.raises(ValueError, match="roles"):
         load_knowledge(bad)
+
+
+def test_process_without_biomass_reports_unknown(setup):
+    """A process profile whose biomass role is not measured must not crash."""
+    from dataclasses import replace
+
+    ds, test, reference, _ = setup
+    kb = load_knowledge()
+    kb = replace(kb, roles={**kb.roles, "biomass": "not_measured"})
+    b = _scenario_batches(ds, "contamination")[0]
+    r = diagnose(test[test["batch_id"] == b], reference, kb=kb).reports[b]
+    assert r.evidence["E04"].state == "unknown"
+    assert r.evidence["E05"].state == "unknown"

@@ -33,6 +33,21 @@ VARIABLES: dict[str, VariableSpec] = {
     "dissolved_oxygen": VariableSpec("%sat", 1.0, (0.0, 150.0), "Dissolved oxygen"),
     "biomass_od600": VariableSpec("OD600", 0.05, (0.0, 200.0), "Optical density (biomass)"),
     "enzyme_activity": VariableSpec("U/mL", 2.0, (0.0, 1e6), "Alpha-amylase activity"),
+    # IndPenSim penicillin process (Goldrick et al. 2015). pH and temperature reuse the
+    # entries above (temperature converted from kelvin).
+    "do2_mg_l": VariableSpec("mg/L", 0.05, (0.0, 50.0), "Dissolved oxygen concentration"),
+    "our": VariableSpec("g/min", 0.01, (-5.0, 50.0), "Oxygen uptake rate"),
+    "cer": VariableSpec("g/h", 0.01, (0.0, 50.0), "Carbon evolution rate"),
+    "co2_offgas": VariableSpec("%", 0.01, (0.0, 20.0), "CO2 in off-gas"),
+    "substrate": VariableSpec("g/L", 0.001, (0.0, 500.0), "Substrate concentration"),
+    "biomass_offline": VariableSpec("g/L", 0.1, (0.0, 200.0), "Biomass (offline assay)"),
+    "penicillin_offline": VariableSpec("g/L", 0.1, (0.0, 200.0), "Penicillin (offline assay)"),
+    # Erythromycin fermentation plant data (Zenodo 14619074). Units are not documented
+    # in the dataset; "as logged" marks that. Ranges exclude the logger's sentinel codes.
+    "ph_offline": VariableSpec("pH", 0.02, (0.0, 14.0), "pH (offline)"),
+    "agitation": VariableSpec("as logged", 1.0, (0.0, 1000.0), "Agitation"),
+    "our_efp": VariableSpec("as logged", 0.5, (0.0, 150.0), "Oxygen uptake rate"),
+    "cer_efp": VariableSpec("as logged", 0.5, (0.0, 150.0), "CO2 evolution rate"),
 }
 
 STAGES = ("lag", "exponential", "stationary")

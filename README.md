@@ -15,7 +15,7 @@ The system investigates contamination; it does not predict future contamination 
 
 ## Status
 
-The MVP works end to end on **synthetic** α-amylase fermentation data with simulated bacterial (*E. coli*) contamination: anomaly detection, diagnosis, source tracing and an investigation dashboard. Real MaverickX batch data has been requested. Results and design decisions are in [`docs/mvp-results.md`](docs/mvp-results.md). Deadline: 28 October 2026.
+The MVP works end to end on **synthetic** α-amylase fermentation data with simulated bacterial (*E. coli*) contamination: anomaly detection, diagnosis, source tracing and an investigation dashboard. It has also been evaluated on external data: the IndPenSim industrial penicillin simulation (100 batches, labelled equipment faults) and 406 real erythromycin plant batches. See [`docs/external-validation.md`](docs/external-validation.md). Real MaverickX batch data has been requested. Synthetic results and design decisions are in [`docs/mvp-results.md`](docs/mvp-results.md). Deadline: 28 October 2026.
 
 ## Investigation dashboard
 
@@ -58,6 +58,8 @@ The demo generates synthetic batches, validates them, fits a frozen reference on
 | `diagnosis.py` | 5 · diagnostic reasoning, 3 · confidence/severity, 4 · next checks | Evidence items (present/absent/unknown), transparent hypothesis ranking, safety rule, investigation reports |
 | `knowledge/catalogue.yaml` | 5 · knowledge base | Hypotheses, evidence matrix, weights, checks: a **draft** for scientist review |
 | `tracing.py` | 2 · source tracing | Batch genealogy graph (NetworkX); candidate sources ranked by over-representation (Fisher's exact test, Bonferroni, confounding check); clusters; affected scope |
+| `datasets/indpensim.py`, `datasets/erythromycin.py` | external data | Download and convert external datasets into campaign folders; evaluate on them |
+| `knowledge/profiles/*.yaml` | 5 · knowledge base | Process profiles mapping the rule book's roles (biomass, oxygen, pH, product, temperature) to each process's variables |
 | `robustness.py` | validation | Multi-seed evaluation of detection and diagnosis |
 | `evaluate.py` | validation | Sensitivity, specificity, precision, false alerts per batch, lead time vs today's method |
 | `pipeline.py` | orchestration | Load a campaign folder; run detection → diagnosis → tracing; per-batch replay |

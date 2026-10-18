@@ -31,7 +31,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-contamination = ["knowledge/*.yaml"]
+contamination = ["knowledge/*.yaml", "knowledge/profiles/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

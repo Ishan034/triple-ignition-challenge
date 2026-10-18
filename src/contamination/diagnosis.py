@@ -62,8 +62,34 @@ class Knowledge:
         return (self.roles["ph"], self.roles["oxygen"], self.roles["biomass"])
 
 
-def load_knowledge(path: str | Path = CATALOGUE_PATH) -> Knowledge:
+PROFILES_DIR = CATALOGUE_PATH.parent / "profiles"
+
+
+def load_knowledge(
+    path: str | Path = CATALOGUE_PATH, profile: str | Path | None = None
+) -> Knowledge:
+    """Load the rule book, optionally adapted to another process by a profile.
+
+    A profile is a small YAML file (``knowledge/profiles/<name>.yaml``, or a path) with
+    ``roles`` (replacing the role -> variable map) and ``parameters`` (overriding single
+    parameters). Hypotheses, evidence links and checks are shared across processes.
+    """
     d = yaml.safe_load(Path(path).read_text())
+    if profile is not None:
+        ppath = Path(profile)
+        if not ppath.exists():
+            ppath = PROFILES_DIR / f"{profile}.yaml"
+        prof = yaml.safe_load(ppath.read_text())
+        d["roles"] = prof.get("roles", d.get("roles", {}))
+        d["parameters"] = {**d["parameters"], **prof.get("parameters", {})}
+        unknown = set(prof.get("parameters", {})) - set(
+            yaml.safe_load(Path(path).read_text())["parameters"]
+        )
+        if unknown:
+            raise ValueError(f"profile {ppath.name} sets unknown parameters {sorted(unknown)}")
+        d["review_status"] = (
+            f"{d['review_status']}; process profile: {prof.get('name', ppath.stem)}"
+        )
     known = set(d["evidence"])
     for hid, h in d["hypotheses"].items():
         unknown = (
@@ -265,6 +291,8 @@ def _delayed_trajectory(
     od: pd.DataFrame, reference: ReferenceProfile, p: dict, biomass_var: str
 ) -> tuple[str, str, float]:
     ref = reference.stats[reference.stats["variable"] == biomass_var].sort_values("hour")
+    if ref.empty:
+        return "unknown", f"No reference for {biomass_var}: biomass is not monitored here.", 0.0
     hours, med, scale = ref["hour"].to_numpy(), ref["median"].to_numpy(), ref["scale"].to_numpy()
     # Fit timing on the growth phase only; the stationary phase says little about delay.
     lo_f, hi_f = p["growth_phase_fraction"]

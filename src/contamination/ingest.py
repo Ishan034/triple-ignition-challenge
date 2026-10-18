@@ -54,7 +54,7 @@ def _flag(df: pd.DataFrame, mask: pd.Series, flag: str, note: str, issues: list)
         issues.append([row.batch_id, row.variable, row.timestamp, note, f"marked {flag}"])
 
 
-def validate_measurements(raw: pd.DataFrame) -> IngestResult:
+def validate_measurements(raw: pd.DataFrame, batch_start: dict | None = None) -> IngestResult:
     """Validate a measurements table and return the flagged table plus an issue report."""
     df = MEASUREMENT_SCHEMA.validate(raw.copy())
     df["quality_flag"] = df["quality_flag"].fillna("valid").astype(str).str.strip().str.lower()
@@ -108,21 +108,24 @@ def validate_measurements(raw: pd.DataFrame) -> IngestResult:
     conflicting = df.duplicated(subset=KEY, keep=False)
     _flag(df, conflicting, "suspect", "conflicting duplicate measurement", issues)
 
-    batch_start = df.groupby("batch_id")["timestamp"].transform("min")
-    df["elapsed_h"] = (df["timestamp"] - batch_start) / pd.Timedelta(hours=1)
-    df["available_h"] = (df["available_at"] - batch_start) / pd.Timedelta(hours=1)
+    # Elapsed time counts from the batch's recorded start when given (plant logs often
+    # begin hours after inoculation), otherwise from its first measurement.
+    first = df.groupby("batch_id")["timestamp"].transform("min")
+    start = df["batch_id"].map(batch_start).fillna(first) if batch_start else first
+    df["elapsed_h"] = (df["timestamp"] - start) / pd.Timedelta(hours=1)
+    df["available_h"] = (df["available_at"] - start) / pd.Timedelta(hours=1)
     df = df.sort_values(["batch_id", "variable", "timestamp"]).reset_index(drop=True)
 
     issue_df = pd.DataFrame(issues, columns=ISSUE_COLUMNS)
     return IngestResult(df, issue_df)
 
 
-def load_measurements(path: str | Path) -> IngestResult:
+def load_measurements(path: str | Path, batch_start: dict | None = None) -> IngestResult:
     raw = pd.read_csv(
         path, parse_dates=["timestamp", "available_at"], dtype={"observation": "object"}
     )
     raw["value"] = pd.to_numeric(raw["value"], errors="coerce")
-    return validate_measurements(raw)
+    return validate_measurements(raw, batch_start)
 
 
 def load_outcomes(path: str | Path) -> pd.DataFrame:
