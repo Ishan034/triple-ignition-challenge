@@ -10,9 +10,15 @@ estimate from the plant's own figures, loading a plant's own data, and an about 
 from __future__ import annotations
 
 import io
+import sys
 import tempfile
 import zipfile
 from pathlib import Path
+
+# Import the model from this checkout's src/, not from an installed copy. Streamlit
+# Cloud installs the package only when requirements.txt changes, so an installed copy
+# can lag behind the code that was pushed (an ImportError on new names).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import numpy as np
 import pandas as pd
