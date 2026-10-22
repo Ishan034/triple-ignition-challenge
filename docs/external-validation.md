@@ -7,7 +7,10 @@ of genuine process deviations, and whether the system avoids calling a non-biolo
 problem "contamination". Contamination detection itself still needs MaverickX's
 records.
 
-Reproduce (downloads ~510 MB, kept out of git):
+Both datasets ship as converted campaign folders (`data/indpensim/`, `data/erythromycin/`,
+CC BY 4.0, attribution in each folder's README) and can be explored in the dashboard.
+Rebuild them from the original downloads (~510 MB, kept out of git) and re-run the
+evaluations with:
 
 ```bash
 python -m contamination.datasets.indpensim prepare && python -m contamination.datasets.indpensim evaluate

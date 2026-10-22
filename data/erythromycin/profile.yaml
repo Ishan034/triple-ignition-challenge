@@ -1,0 +1,12 @@
+# Process profile: industrial erythromycin fermentation (Zenodo 14619074).
+# No biomass or product assay is monitored: potency is held out as the outcome, and
+# the undocumented columns are not used. Evidence that needs those roles reports
+# "unknown". Draft, like the rule book.
+name: Erythromycin fermentation (plant data)
+roles:
+  biomass: not_measured
+  oxygen: dissolved_oxygen
+  ph: ph
+  product: not_measured
+  temperature: temperature
+parameters: {}

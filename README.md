@@ -33,7 +33,9 @@ streamlit run app/dashboard.py      # opens http://localhost:8501
 - **Load your data**: upload plant exports plus a `mapping.yaml`, convert, see the readiness report, and monitor them. The [data template](docs/data-template/) shows the format.
 - **How it works**: a plain-language explanation and the system's limits.
 
-A "Show simulated ground truth" toggle (synthetic data only) shows the known answers for evaluation. The model never sees them.
+Pick the dataset in the sidebar: the **synthetic demo**, **IndPenSim** (100 simulated industrial penicillin batches with labelled equipment faults, `data/indpensim/`) or the **erythromycin plant** (406 real batches without labels, `data/erythromycin/`). Both external datasets are CC BY 4.0 and ship as converted campaign folders, so nothing needs downloading; each folder's `reference_batches.txt` lists the batches approved as normal (the same split as the evaluation), and `reference_profile.json` caches the fitted reference. Data loaded through **Load your data** appears in the list too (it is kept out of git).
+
+A "Show known outcomes" toggle shows the answers for evaluation (simulated truth, fault labels, or final potency). The model never sees them.
 
 ### Deploying (Streamlit Community Cloud)
 

@@ -1,6 +1,8 @@
 """Campaign-level pipeline used by the dashboard: load data, then detect, diagnose, trace.
 
-A *campaign* is a folder with ``measurements.csv`` and ``batches.csv``, plus
+A *campaign* is a folder with ``measurements.csv`` (or ``measurements.csv.gz``) and
+``batches.csv``, plus ``reference_batches.txt`` (the batches approved as normal, one
+per line) when the reference is not simply the earliest batches, and
 optional ``investigations.csv`` (recorded check results), ``outcomes.csv`` (known
 answers, used only for evaluation and never by the model), ``profile.yaml`` (a
 process profile adapting the rule book's roles to this process's variables) and
@@ -9,7 +11,8 @@ process profile adapting the rule book's roles to this process's variables) and
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
@@ -39,24 +42,40 @@ class Campaign:
     reference_ids: list[str]
     monitored_ids: list[str]
     kb: Knowledge
+    data_dir: Path | None = None
+    reference_source: str = "earliest batches"
 
     @property
     def measurements(self) -> pd.DataFrame:
         return self.ingest.measurements
 
 
+REFERENCE_LIST = "reference_batches.txt"
+REFERENCE_CACHE = "reference_profile.json"
+
+
+def measurements_path(data_dir: str | Path) -> Path | None:
+    """The campaign's measurements file, plain or gzip-compressed."""
+    for name in ("measurements.csv", "measurements.csv.gz"):
+        if (Path(data_dir) / name).exists():
+            return Path(data_dir) / name
+    return None
+
+
 def load_campaign(
     data_dir: str | Path, n_reference: int = 30, reference_ids: list[str] | None = None
 ) -> Campaign:
     """Load a campaign. ``reference_ids`` are the batches approved as normal; without
-    them, the earliest ``n_reference`` batches are used (the synthetic demo's rule).
+    them, the list in ``reference_batches.txt`` is used if the folder has one, otherwise
+    the earliest ``n_reference`` batches (the synthetic demo's rule).
     """
     d = Path(data_dir)
     load_variables(d)
     batches = load_batches(d / "batches.csv")
-    ingest = load_measurements(
-        d / "measurements.csv", batches.set_index("batch_id")["start_time"].to_dict()
-    )
+    m_path = measurements_path(d)
+    if m_path is None:
+        raise FileNotFoundError(f"no measurements.csv(.gz) in {d}")
+    ingest = load_measurements(m_path, batches.set_index("batch_id")["start_time"].to_dict())
     inv_path, out_path = d / "investigations.csv", d / "outcomes.csv"
     investigations = (
         load_investigations(inv_path)
@@ -65,19 +84,55 @@ def load_campaign(
     )
     outcomes = load_outcomes(out_path) if out_path.exists() else None
     ordered = batches.sort_values("start_time")["batch_id"].tolist()
+    source = "given list"
+    if reference_ids is None and (d / REFERENCE_LIST).exists():
+        reference_ids = [b for b in (d / REFERENCE_LIST).read_text().split() if b]
+        source = f"{REFERENCE_LIST} ({len(reference_ids)} approved batches)"
     if reference_ids is None:
         reference_ids = ordered[:n_reference]
+        source = f"earliest {len(reference_ids)} batches"
     unknown = set(reference_ids) - set(ordered)
     if unknown:
         raise ValueError(f"reference batches not in campaign: {sorted(unknown)}")
     monitored = [b for b in ordered if b not in set(reference_ids)]
     profile = d / "profile.yaml"
     kb = load_knowledge(profile=profile) if profile.exists() else load_knowledge()
-    return Campaign(ingest, batches, investigations, outcomes, list(reference_ids), monitored, kb)
+    return Campaign(
+        ingest, batches, investigations, outcomes, list(reference_ids), monitored, kb, d, source
+    )
 
 
 def fit(campaign: Campaign, config: MonitorConfig = DEFAULT_CONFIG) -> ReferenceProfile:
     return fit_reference(campaign.measurements, campaign.reference_ids, config)
+
+
+def _fingerprint(campaign: Campaign, config: MonitorConfig) -> str:
+    h = hashlib.sha256(measurements_path(campaign.data_dir).read_bytes())
+    h.update(repr((sorted(campaign.reference_ids), asdict(config))).encode())
+    return h.hexdigest()[:16]
+
+
+def fit_cached(campaign: Campaign, config: MonitorConfig = DEFAULT_CONFIG) -> ReferenceProfile:
+    """Fit, or reuse ``reference_profile.json`` in the campaign folder when it was fitted
+    on the same measurements, approved batches and settings (calibration on hundreds of
+    batches takes minutes)."""
+    if campaign.data_dir is None:
+        return fit(campaign, config)
+    key, path = _fingerprint(campaign, config), campaign.data_dir / REFERENCE_CACHE
+    if path.exists():
+        try:
+            cached = ReferenceProfile.load(path)
+            if cached.calibration.get("fingerprint") == key:
+                return cached
+        except (ValueError, KeyError):
+            pass
+    reference = fit(campaign, config)
+    reference.calibration["fingerprint"] = key
+    try:
+        reference.save(path)
+    except OSError:
+        pass  # read-only folder: just don't cache
+    return reference
 
 
 @dataclass

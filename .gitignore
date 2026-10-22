@@ -8,3 +8,6 @@ __pycache__/
 outputs/
 build/
 data/external/
+
+# Plant data uploaded through the dashboard (confidential, never committed)
+data/imported/

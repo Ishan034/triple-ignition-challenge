@@ -7,7 +7,6 @@ from streamlit.testing.v1 import AppTest
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = str(ROOT / "app" / "dashboard.py")
-DATA = str(ROOT / "data" / "synthetic")
 
 pytestmark = pytest.mark.skipif(
     not (ROOT / "data" / "synthetic" / "measurements.csv").exists(),
@@ -15,10 +14,10 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _app(page: str) -> AppTest:
+def _app(page: str, dataset: str = "Synthetic demo (simulated contamination)") -> AppTest:
     at = AppTest.from_file(APP, default_timeout=180)
     at.run()
-    at.sidebar.text_input[0].set_value(DATA)
+    at.sidebar.selectbox[0].set_value(dataset)
     at.run()
     at.sidebar.radio[0].set_value(page)
     at.run()
@@ -80,3 +79,16 @@ def test_value_page():
 def test_load_page():
     at = _app("Load your data")
     assert any(h.value == "Load your data" for h in at.header)
+
+
+@pytest.mark.parametrize(
+    "dataset",
+    [
+        "IndPenSim (simulated penicillin, equipment faults)",
+        "Erythromycin plant (real batches, no labels)",
+    ],
+)
+def test_external_datasets_open(dataset):
+    at = _app("Campaign overview", dataset)
+    assert any(m.label == "Batches monitored" for m in at.metric)
+    assert any("approved batches (reference_batches.txt" in c.value for c in at.sidebar.caption)

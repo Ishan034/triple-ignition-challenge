@@ -1,0 +1,1864 @@
+{
+  "version": "c3a42a7b2a1b",
+  "created_at": "2026-10-22T13:44:30+00:00",
+  "batch_ids": [
+    "B001",
+    "B002",
+    "B003",
+    "B004",
+    "B005",
+    "B006",
+    "B007",
+    "B008",
+    "B009",
+    "B010",
+    "B011",
+    "B012",
+    "B013",
+    "B014",
+    "B015",
+    "B016",
+    "B017",
+    "B018",
+    "B019",
+    "B020",
+    "B021",
+    "B022",
+    "B023",
+    "B024",
+    "B025",
+    "B026",
+    "B027",
+    "B028",
+    "B029",
+    "B030"
+  ],
+  "params": {
+    "window_h": 1.0
+  },
+  "thresholds": {
+    "robust_threshold": {
+      "ph": 4.1397,
+      "temperature": 4.0538,
+      "dissolved_oxygen": 7.2015,
+      "biomass_od600": 6.3231,
+      "enzyme_activity": 4.0,
+      "do2_mg_l": 4.0,
+      "our": 4.0,
+      "cer": 4.0,
+      "co2_offgas": 4.0,
+      "substrate": 4.0,
+      "biomass_offline": 4.0,
+      "penicillin_offline": 4.0,
+      "base_flow": 4.0,
+      "coolant_flow": 4.0,
+      "ph_offline": 4.0,
+      "agitation": 4.0,
+      "our_efp": 4.0,
+      "cer_efp": 4.0
+    },
+    "ewma": {
+      "ph": 1.96,
+      "temperature": 2.2829,
+      "dissolved_oxygen": 5.454,
+      "biomass_od600": 3.479,
+      "enzyme_activity": 2.1562,
+      "do2_mg_l": 1.0,
+      "our": 1.0,
+      "cer": 1.0,
+      "co2_offgas": 1.0,
+      "substrate": 1.0,
+      "biomass_offline": 1.0,
+      "penicillin_offline": 1.0,
+      "base_flow": 1.0,
+      "coolant_flow": 1.0,
+      "ph_offline": 1.0,
+      "agitation": 1.0,
+      "our_efp": 1.0,
+      "cer_efp": 1.0
+    },
+    "cusum": {
+      "ph": 15.0217,
+      "temperature": 51.9496,
+      "dissolved_oxygen": 69.6579,
+      "biomass_od600": 41.1252,
+      "enzyme_activity": 16.1264,
+      "do2_mg_l": 5.0,
+      "our": 5.0,
+      "cer": 5.0,
+      "co2_offgas": 5.0,
+      "substrate": 5.0,
+      "biomass_offline": 5.0,
+      "penicillin_offline": 5.0,
+      "base_flow": 5.0,
+      "coolant_flow": 5.0,
+      "ph_offline": 5.0,
+      "agitation": 5.0,
+      "our_efp": 5.0,
+      "cer_efp": 5.0
+    }
+  },
+  "calibration": {
+    "method": "leave-one-out over approved batches; limit = max(default, margin * quantile of per-batch peak |statistic|); robust-threshold quantile chosen so at most 5% of approved batches would alert",
+    "quantiles": {
+      "robust_threshold": 0.995,
+      "ewma": 1.0,
+      "cusum": 1.0
+    },
+    "default_limits": {
+      "robust_threshold": 4.0,
+      "ewma": 1.0,
+      "cusum": 5.0
+    },
+    "loo_max_statistic": {
+      "robust_threshold": {
+        "ph": 3.825,
+        "temperature": 3.7097,
+        "dissolved_oxygen": 6.9135,
+        "biomass_od600": 6.1052,
+        "enzyme_activity": 3.3632,
+        "do2_mg_l": 0.0,
+        "our": 0.0,
+        "cer": 0.0,
+        "co2_offgas": 0.0,
+        "substrate": 0.0,
+        "biomass_offline": 0.0,
+        "penicillin_offline": 0.0,
+        "base_flow": 0.0,
+        "coolant_flow": 0.0,
+        "ph_offline": 0.0,
+        "agitation": 0.0,
+        "our_efp": 0.0,
+        "cer_efp": 0.0
+      },
+      "ewma": {
+        "ph": 1.7819,
+        "temperature": 2.0754,
+        "dissolved_oxygen": 4.9582,
+        "biomass_od600": 3.1627,
+        "enzyme_activity": 1.9602,
+        "do2_mg_l": 0.0,
+        "our": 0.0,
+        "cer": 0.0,
+        "co2_offgas": 0.0,
+        "substrate": 0.0,
+        "biomass_offline": 0.0,
+        "penicillin_offline": 0.0,
+        "base_flow": 0.0,
+        "coolant_flow": 0.0,
+        "ph_offline": 0.0,
+        "agitation": 0.0,
+        "our_efp": 0.0,
+        "cer_efp": 0.0
+      },
+      "cusum": {
+        "ph": 13.6561,
+        "temperature": 47.2269,
+        "dissolved_oxygen": 63.3254,
+        "biomass_od600": 37.3865,
+        "enzyme_activity": 14.6603,
+        "do2_mg_l": 0.0,
+        "our": 0.0,
+        "cer": 0.0,
+        "co2_offgas": 0.0,
+        "substrate": 0.0,
+        "biomass_offline": 0.0,
+        "penicillin_offline": 0.0,
+        "base_flow": 0.0,
+        "coolant_flow": 0.0,
+        "ph_offline": 0.0,
+        "agitation": 0.0,
+        "our_efp": 0.0,
+        "cer_efp": 0.0
+      }
+    },
+    "approved_batches_alerting": [],
+    "config": {
+      "window_h": 1.0,
+      "min_reference_batches": 5,
+      "robust_limit": 4.0,
+      "ewma_lambda": 0.2,
+      "ewma_L": 3.0,
+      "cusum_k": 0.5,
+      "cusum_h": 5.0,
+      "calibration_margin": 1.1,
+      "calibration_quantile": 1.0,
+      "threshold_calibration_quantile": 1.0,
+      "false_alarm_budget": 0.05,
+      "corroboration_window_h": 3.0,
+      "detectors": [
+        "robust_threshold",
+        "ewma",
+        "cusum"
+      ]
+    },
+    "fingerprint": "9373384c8e031dcf"
+  },
+  "stats": [
+    {
+      "variable": "biomass_od600",
+      "hour": 0.0,
+      "median": 0.105,
+      "scale": 0.05,
+      "mad": 0.015,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 2.0,
+      "median": 0.1015,
+      "scale": 0.05,
+      "mad": 0.0075,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 4.0,
+      "median": 0.1125,
+      "scale": 0.05,
+      "mad": 0.019000000000000003,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 6.0,
+      "median": 0.20450000000000002,
+      "scale": 0.06078659999999999,
+      "mad": 0.040999999999999995,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 8.0,
+      "median": 0.3955,
+      "scale": 0.11934930000000002,
+      "mad": 0.08050000000000002,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 10.0,
+      "median": 0.751,
+      "scale": 0.26167890000000005,
+      "mad": 0.17650000000000005,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 12.0,
+      "median": 1.3615,
+      "scale": 0.4114214999999998,
+      "mad": 0.27749999999999986,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 14.0,
+      "median": 2.302,
+      "scale": 0.7509369,
+      "mad": 0.5065000000000001,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 16.0,
+      "median": 3.6159999999999997,
+      "scale": 0.9711030000000003,
+      "mad": 0.6550000000000002,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 18.0,
+      "median": 5.077500000000001,
+      "scale": 0.9355205999999996,
+      "mad": 0.6309999999999998,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 20.0,
+      "median": 6.17,
+      "scale": 0.8584254000000002,
+      "mad": 0.5790000000000002,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 22.0,
+      "median": 7.025,
+      "scale": 0.6137964000000001,
+      "mad": 0.41400000000000015,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 24.0,
+      "median": 7.4445,
+      "scale": 0.5537511000000005,
+      "mad": 0.3735000000000004,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 26.0,
+      "median": 7.6775,
+      "scale": 0.7531608,
+      "mad": 0.508,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 28.0,
+      "median": 7.938000000000001,
+      "scale": 0.5900748000000008,
+      "mad": 0.3980000000000006,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 30.0,
+      "median": 7.964,
+      "scale": 0.5122382999999998,
+      "mad": 0.3454999999999999,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 32.0,
+      "median": 7.949,
+      "scale": 0.42179969999999994,
+      "mad": 0.2845,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 34.0,
+      "median": 7.8580000000000005,
+      "scale": 0.42105840000000033,
+      "mad": 0.28400000000000025,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 36.0,
+      "median": 8.0485,
+      "scale": 0.4892580000000014,
+      "mad": 0.33000000000000096,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 38.0,
+      "median": 8.0465,
+      "scale": 0.43959089999999995,
+      "mad": 0.2965,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 40.0,
+      "median": 8.134,
+      "scale": 0.38769989999999976,
+      "mad": 0.26149999999999984,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 42.0,
+      "median": 8.157,
+      "scale": 0.2891069999999997,
+      "mad": 0.19499999999999984,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 44.0,
+      "median": 8.100999999999999,
+      "scale": 0.49296449999999936,
+      "mad": 0.3324999999999996,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 46.0,
+      "median": 8.160499999999999,
+      "scale": 0.4625712000000004,
+      "mad": 0.3120000000000003,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "biomass_od600",
+      "hour": 48.0,
+      "median": 8.045,
+      "scale": 0.41735190000000044,
+      "mad": 0.2815000000000003,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 0.0,
+      "median": 99.5,
+      "scale": 1.0,
+      "mad": 0.5,
+      "n_values": 60,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 1.0,
+      "median": 99.5,
+      "scale": 1.0,
+      "mad": 0.5,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 2.0,
+      "median": 99.5,
+      "scale": 1.0,
+      "mad": 0.5,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 3.0,
+      "median": 99.30000000000001,
+      "scale": 1.037819999999983,
+      "mad": 0.6999999999999886,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 4.0,
+      "median": 97.25,
+      "scale": 3.3358499999999998,
+      "mad": 2.25,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 5.0,
+      "median": 94.3,
+      "scale": 2.6686799999999957,
+      "mad": 1.7999999999999972,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 6.0,
+      "median": 92.6,
+      "scale": 2.6686800000000064,
+      "mad": 1.8000000000000043,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 7.0,
+      "median": 89.75,
+      "scale": 4.151279999999995,
+      "mad": 2.799999999999997,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 8.0,
+      "median": 86.1,
+      "scale": 5.114970000000004,
+      "mad": 3.450000000000003,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 9.0,
+      "median": 80.9,
+      "scale": 6.745830000000006,
+      "mad": 4.550000000000004,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 10.0,
+      "median": 74.30000000000001,
+      "scale": 8.8956,
+      "mad": 6.0,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 11.0,
+      "median": 66.65,
+      "scale": 10.89710999999999,
+      "mad": 7.349999999999994,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 12.0,
+      "median": 57.9,
+      "scale": 12.97275,
+      "mad": 8.75,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 13.0,
+      "median": 46.95,
+      "scale": 14.307090000000002,
+      "mad": 9.650000000000002,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 14.0,
+      "median": 36.7,
+      "scale": 12.75036,
+      "mad": 8.600000000000001,
+      "n_values": 89,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 15.0,
+      "median": 29.7,
+      "scale": 6.597570000000001,
+      "mad": 4.450000000000001,
+      "n_values": 88,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 16.0,
+      "median": 27.3,
+      "scale": 4.151280000000001,
+      "mad": 2.8000000000000007,
+      "n_values": 87,
+      "n_batches": 29
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 17.0,
+      "median": 27.3,
+      "scale": 4.299539999999998,
+      "mad": 2.8999999999999986,
+      "n_values": 87,
+      "n_batches": 29
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 18.0,
+      "median": 28.2,
+      "scale": 6.37518,
+      "mad": 4.300000000000001,
+      "n_values": 88,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 19.0,
+      "median": 35.0,
+      "scale": 12.30558,
+      "mad": 8.3,
+      "n_values": 89,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 20.0,
+      "median": 42.05,
+      "scale": 14.825999999999999,
+      "mad": 10.0,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 21.0,
+      "median": 49.25,
+      "scale": 15.34491,
+      "mad": 10.350000000000001,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 22.0,
+      "median": 57.75,
+      "scale": 14.603610000000002,
+      "mad": 9.850000000000001,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 23.0,
+      "median": 65.5,
+      "scale": 13.195139999999997,
+      "mad": 8.899999999999999,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 24.0,
+      "median": 71.7,
+      "scale": 10.00755,
+      "mad": 6.75,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 25.0,
+      "median": 75.7,
+      "scale": 8.080170000000004,
+      "mad": 5.450000000000003,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 26.0,
+      "median": 79.69999999999999,
+      "scale": 6.078660000000002,
+      "mad": 4.100000000000001,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 27.0,
+      "median": 81.7,
+      "scale": 5.263229999999996,
+      "mad": 3.549999999999997,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 28.0,
+      "median": 83.55,
+      "scale": 3.3358500000000104,
+      "mad": 2.250000000000007,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 29.0,
+      "median": 84.55,
+      "scale": 2.816940000000008,
+      "mad": 1.9000000000000057,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 30.0,
+      "median": 85.5,
+      "scale": 2.4462899999999976,
+      "mad": 1.6499999999999986,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 31.0,
+      "median": 86.35,
+      "scale": 2.298030000000006,
+      "mad": 1.5500000000000043,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 32.0,
+      "median": 86.9,
+      "scale": 2.001510000000002,
+      "mad": 1.3500000000000014,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 33.0,
+      "median": 87.2,
+      "scale": 1.3343399999999872,
+      "mad": 0.8999999999999915,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 34.0,
+      "median": 87.5,
+      "scale": 1.260210000000002,
+      "mad": 0.8500000000000014,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 35.0,
+      "median": 87.5,
+      "scale": 1.4826,
+      "mad": 1.0,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 36.0,
+      "median": 87.65,
+      "scale": 1.7049899999999978,
+      "mad": 1.1499999999999986,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 37.0,
+      "median": 87.8,
+      "scale": 1.779120000000004,
+      "mad": 1.2000000000000028,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 38.0,
+      "median": 87.9,
+      "scale": 1.3343399999999979,
+      "mad": 0.8999999999999986,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 39.0,
+      "median": 87.9,
+      "scale": 1.3343399999999872,
+      "mad": 0.8999999999999915,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 40.0,
+      "median": 87.9,
+      "scale": 1.3343400000000083,
+      "mad": 0.9000000000000057,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 41.0,
+      "median": 87.7,
+      "scale": 1.3343400000000083,
+      "mad": 0.9000000000000057,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 42.0,
+      "median": 87.7,
+      "scale": 1.4826,
+      "mad": 1.0,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 43.0,
+      "median": 87.65,
+      "scale": 1.7049899999999978,
+      "mad": 1.1499999999999986,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 44.0,
+      "median": 87.9,
+      "scale": 1.6308600000000126,
+      "mad": 1.1000000000000085,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 45.0,
+      "median": 87.95,
+      "scale": 1.408470000000004,
+      "mad": 0.9500000000000028,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 46.0,
+      "median": 88.2,
+      "scale": 1.1860799999999958,
+      "mad": 0.7999999999999972,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 47.0,
+      "median": 88.1,
+      "scale": 1.186080000000017,
+      "mad": 0.8000000000000114,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "dissolved_oxygen",
+      "hour": 48.0,
+      "median": 88.05,
+      "scale": 1.3343400000000083,
+      "mad": 0.9000000000000057,
+      "n_values": 60,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 0.0,
+      "median": 0.25,
+      "scale": 2.0,
+      "mad": 0.25,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 4.0,
+      "median": 0.1,
+      "scale": 2.0,
+      "mad": 0.1,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 8.0,
+      "median": 0.8500000000000001,
+      "scale": 2.0,
+      "mad": 0.7000000000000001,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 12.0,
+      "median": 2.1,
+      "scale": 2.07564,
+      "mad": 1.4,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 16.0,
+      "median": 6.699999999999999,
+      "scale": 3.8547599999999997,
+      "mad": 2.6,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 20.0,
+      "median": 21.0,
+      "scale": 9.562769999999999,
+      "mad": 6.449999999999999,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 24.0,
+      "median": 54.05,
+      "scale": 18.5325,
+      "mad": 12.5,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 28.0,
+      "median": 89.95,
+      "scale": 15.19665,
+      "mad": 10.25,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 32.0,
+      "median": 108.94999999999999,
+      "scale": 12.898620000000014,
+      "mad": 8.70000000000001,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 36.0,
+      "median": 115.25,
+      "scale": 8.599079999999995,
+      "mad": 5.799999999999997,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 40.0,
+      "median": 117.44999999999999,
+      "scale": 8.006040000000018,
+      "mad": 5.400000000000013,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 44.0,
+      "median": 119.1,
+      "scale": 6.30105,
+      "mad": 4.25,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "enzyme_activity",
+      "hour": 48.0,
+      "median": 119.19999999999999,
+      "scale": 7.709519999999983,
+      "mad": 5.199999999999989,
+      "n_values": 30,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 0.0,
+      "median": 7.002,
+      "scale": 0.02,
+      "mad": 0.00849999999999973,
+      "n_values": 60,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 1.0,
+      "median": 7.0009999999999994,
+      "scale": 0.02,
+      "mad": 0.010500000000000398,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 2.0,
+      "median": 6.9965,
+      "scale": 0.02,
+      "mad": 0.0129999999999999,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 3.0,
+      "median": 6.9915,
+      "scale": 0.020756400000000348,
+      "mad": 0.014000000000000234,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 4.0,
+      "median": 6.9905,
+      "scale": 0.02001509999999944,
+      "mad": 0.013499999999999623,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 5.0,
+      "median": 6.9864999999999995,
+      "scale": 0.02,
+      "mad": 0.010499999999999954,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 6.0,
+      "median": 6.983499999999999,
+      "scale": 0.02,
+      "mad": 0.012500000000001066,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 7.0,
+      "median": 6.977,
+      "scale": 0.02075639999999969,
+      "mad": 0.01399999999999979,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 8.0,
+      "median": 6.9645,
+      "scale": 0.020015100000000098,
+      "mad": 0.013500000000000068,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 9.0,
+      "median": 6.955500000000001,
+      "scale": 0.022239000000000182,
+      "mad": 0.015000000000000124,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 10.0,
+      "median": 6.9405,
+      "scale": 0.03113459999999986,
+      "mad": 0.020999999999999908,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 11.0,
+      "median": 6.9245,
+      "scale": 0.03706499999999987,
+      "mad": 0.02499999999999991,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 12.0,
+      "median": 6.8945,
+      "scale": 0.04373670000000012,
+      "mad": 0.02950000000000008,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 13.0,
+      "median": 6.8695,
+      "scale": 0.04299539999999987,
+      "mad": 0.028999999999999915,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 14.0,
+      "median": 6.843500000000001,
+      "scale": 0.045219300000001274,
+      "mad": 0.03050000000000086,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 15.0,
+      "median": 6.8134999999999994,
+      "scale": 0.05040840000000103,
+      "mad": 0.034000000000000696,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 16.0,
+      "median": 6.786,
+      "scale": 0.039288899999999294,
+      "mad": 0.026499999999999524,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 17.0,
+      "median": 6.7645,
+      "scale": 0.033358499999999944,
+      "mad": 0.022499999999999964,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 18.0,
+      "median": 6.749499999999999,
+      "scale": 0.025204199999999198,
+      "mad": 0.01699999999999946,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 19.0,
+      "median": 6.7455,
+      "scale": 0.022980299999999114,
+      "mad": 0.015499999999999403,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 20.0,
+      "median": 6.744,
+      "scale": 0.024462899999999607,
+      "mad": 0.016499999999999737,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 21.0,
+      "median": 6.7385,
+      "scale": 0.028169400000000188,
+      "mad": 0.019000000000000128,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 22.0,
+      "median": 6.737500000000001,
+      "scale": 0.027428099999999282,
+      "mad": 0.018499999999999517,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 23.0,
+      "median": 6.739,
+      "scale": 0.02668679999999969,
+      "mad": 0.017999999999999794,
+      "n_values": 89,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 24.0,
+      "median": 6.744,
+      "scale": 0.02001509999999944,
+      "mad": 0.013499999999999623,
+      "n_values": 88,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 25.0,
+      "median": 6.747,
+      "scale": 0.020756400000000348,
+      "mad": 0.014000000000000234,
+      "n_values": 87,
+      "n_batches": 29
+    },
+    {
+      "variable": "ph",
+      "hour": 26.0,
+      "median": 6.747,
+      "scale": 0.02,
+      "mad": 0.01100000000000012,
+      "n_values": 87,
+      "n_batches": 29
+    },
+    {
+      "variable": "ph",
+      "hour": 27.0,
+      "median": 6.747,
+      "scale": 0.02,
+      "mad": 0.011999999999999567,
+      "n_values": 87,
+      "n_batches": 29
+    },
+    {
+      "variable": "ph",
+      "hour": 28.0,
+      "median": 6.747,
+      "scale": 0.02,
+      "mad": 0.012000000000000455,
+      "n_values": 87,
+      "n_batches": 29
+    },
+    {
+      "variable": "ph",
+      "hour": 29.0,
+      "median": 6.748,
+      "scale": 0.02075639999999903,
+      "mad": 0.013999999999999346,
+      "n_values": 87,
+      "n_batches": 29
+    },
+    {
+      "variable": "ph",
+      "hour": 30.0,
+      "median": 6.748,
+      "scale": 0.02,
+      "mad": 0.0129999999999999,
+      "n_values": 86,
+      "n_batches": 29
+    },
+    {
+      "variable": "ph",
+      "hour": 31.0,
+      "median": 6.753,
+      "scale": 0.02,
+      "mad": 0.011999999999999567,
+      "n_values": 86,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 32.0,
+      "median": 6.7524999999999995,
+      "scale": 0.02,
+      "mad": 0.011499999999999844,
+      "n_values": 86,
+      "n_batches": 29
+    },
+    {
+      "variable": "ph",
+      "hour": 33.0,
+      "median": 6.755,
+      "scale": 0.02,
+      "mad": 0.0129999999999999,
+      "n_values": 87,
+      "n_batches": 29
+    },
+    {
+      "variable": "ph",
+      "hour": 34.0,
+      "median": 6.751,
+      "scale": 0.022238999999999523,
+      "mad": 0.01499999999999968,
+      "n_values": 87,
+      "n_batches": 29
+    },
+    {
+      "variable": "ph",
+      "hour": 35.0,
+      "median": 6.754,
+      "scale": 0.02223900000000084,
+      "mad": 0.015000000000000568,
+      "n_values": 87,
+      "n_batches": 29
+    },
+    {
+      "variable": "ph",
+      "hour": 36.0,
+      "median": 6.745,
+      "scale": 0.02,
+      "mad": 0.0129999999999999,
+      "n_values": 87,
+      "n_batches": 29
+    },
+    {
+      "variable": "ph",
+      "hour": 37.0,
+      "median": 6.750500000000001,
+      "scale": 0.021497699999999936,
+      "mad": 0.014499999999999957,
+      "n_values": 88,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 38.0,
+      "median": 6.747,
+      "scale": 0.020756400000000348,
+      "mad": 0.014000000000000234,
+      "n_values": 89,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 39.0,
+      "median": 6.749499999999999,
+      "scale": 0.021497700000001254,
+      "mad": 0.014500000000000846,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 40.0,
+      "median": 6.749,
+      "scale": 0.02075639999999969,
+      "mad": 0.01399999999999979,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 41.0,
+      "median": 6.750500000000001,
+      "scale": 0.02,
+      "mad": 0.0129999999999999,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 42.0,
+      "median": 6.7475000000000005,
+      "scale": 0.02075639999999969,
+      "mad": 0.01399999999999979,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 43.0,
+      "median": 6.748,
+      "scale": 0.02075639999999903,
+      "mad": 0.013999999999999346,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 44.0,
+      "median": 6.7475000000000005,
+      "scale": 0.021497699999998617,
+      "mad": 0.01449999999999907,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 45.0,
+      "median": 6.749,
+      "scale": 0.02,
+      "mad": 0.0129999999999999,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 46.0,
+      "median": 6.7485,
+      "scale": 0.02,
+      "mad": 0.01200000000000001,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 47.0,
+      "median": 6.749,
+      "scale": 0.02,
+      "mad": 0.01200000000000001,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "ph",
+      "hour": 48.0,
+      "median": 6.749,
+      "scale": 0.022980300000000432,
+      "mad": 0.015500000000000291,
+      "n_values": 60,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 0.0,
+      "median": 37.0,
+      "scale": 0.07412999999999578,
+      "mad": 0.04999999999999716,
+      "n_values": 60,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 1.0,
+      "median": 37.0,
+      "scale": 0.07412999999999578,
+      "mad": 0.04999999999999716,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 2.0,
+      "median": 36.99,
+      "scale": 0.08895599999999283,
+      "mad": 0.05999999999999517,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 3.0,
+      "median": 36.99,
+      "scale": 0.07413000000000632,
+      "mad": 0.05000000000000426,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 4.0,
+      "median": 36.99,
+      "scale": 0.08895599999999283,
+      "mad": 0.05999999999999517,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 5.0,
+      "median": 36.99,
+      "scale": 0.07413000000000632,
+      "mad": 0.05000000000000426,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 6.0,
+      "median": 36.974999999999994,
+      "scale": 0.08154299999998904,
+      "mad": 0.05499999999999261,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 7.0,
+      "median": 36.98,
+      "scale": 0.08895599999999283,
+      "mad": 0.05999999999999517,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 8.0,
+      "median": 36.99,
+      "scale": 0.08895599999999809,
+      "mad": 0.05999999999999872,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 9.0,
+      "median": 37.0,
+      "scale": 0.07412999999999578,
+      "mad": 0.04999999999999716,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 10.0,
+      "median": 37.0,
+      "scale": 0.06671699999999725,
+      "mad": 0.04499999999999815,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 11.0,
+      "median": 37.0,
+      "scale": 0.07412999999999578,
+      "mad": 0.04999999999999716,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 12.0,
+      "median": 37.0,
+      "scale": 0.07412999999999578,
+      "mad": 0.04999999999999716,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 13.0,
+      "median": 36.995000000000005,
+      "scale": 0.06671700000000252,
+      "mad": 0.045000000000001705,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 14.0,
+      "median": 37.0,
+      "scale": 0.07412999999999578,
+      "mad": 0.04999999999999716,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 15.0,
+      "median": 37.004999999999995,
+      "scale": 0.06671700000000252,
+      "mad": 0.045000000000001705,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 16.0,
+      "median": 37.0,
+      "scale": 0.08154299999999957,
+      "mad": 0.054999999999999716,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 17.0,
+      "median": 37.0,
+      "scale": 0.08895600000000337,
+      "mad": 0.060000000000002274,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 18.0,
+      "median": 36.99,
+      "scale": 0.07413000000000106,
+      "mad": 0.05000000000000071,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 19.0,
+      "median": 37.01,
+      "scale": 0.06671699999999725,
+      "mad": 0.04499999999999815,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 20.0,
+      "median": 37.01,
+      "scale": 0.05189100000000021,
+      "mad": 0.03500000000000014,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 21.0,
+      "median": 37.0,
+      "scale": 0.05930399999999873,
+      "mad": 0.03999999999999915,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 22.0,
+      "median": 36.985,
+      "scale": 0.07413000000000106,
+      "mad": 0.05000000000000071,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 23.0,
+      "median": 36.99,
+      "scale": 0.07413000000000632,
+      "mad": 0.05000000000000426,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 24.0,
+      "median": 36.99,
+      "scale": 0.08895599999999283,
+      "mad": 0.05999999999999517,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 25.0,
+      "median": 37.0,
+      "scale": 0.07412999999999578,
+      "mad": 0.04999999999999716,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 26.0,
+      "median": 37.0,
+      "scale": 0.07412999999999578,
+      "mad": 0.04999999999999716,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 27.0,
+      "median": 36.99,
+      "scale": 0.07412999999999578,
+      "mad": 0.04999999999999716,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 28.0,
+      "median": 36.98,
+      "scale": 0.06671700000000252,
+      "mad": 0.045000000000001705,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 29.0,
+      "median": 36.98,
+      "scale": 0.07412999999999578,
+      "mad": 0.04999999999999716,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 30.0,
+      "median": 36.985,
+      "scale": 0.06671700000000252,
+      "mad": 0.045000000000001705,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 31.0,
+      "median": 36.985,
+      "scale": 0.08895599999999809,
+      "mad": 0.05999999999999872,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 32.0,
+      "median": 36.98,
+      "scale": 0.07413000000000632,
+      "mad": 0.05000000000000426,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 33.0,
+      "median": 36.99,
+      "scale": 0.07413000000000106,
+      "mad": 0.05000000000000071,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 34.0,
+      "median": 36.995000000000005,
+      "scale": 0.06671700000000252,
+      "mad": 0.045000000000001705,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 35.0,
+      "median": 37.0,
+      "scale": 0.08895600000000337,
+      "mad": 0.060000000000002274,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 36.0,
+      "median": 36.99,
+      "scale": 0.10378200000000042,
+      "mad": 0.07000000000000028,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 37.0,
+      "median": 37.0,
+      "scale": 0.08895600000000337,
+      "mad": 0.060000000000002274,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 38.0,
+      "median": 36.99,
+      "scale": 0.08895599999999809,
+      "mad": 0.05999999999999872,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 39.0,
+      "median": 36.99,
+      "scale": 0.07413000000000106,
+      "mad": 0.05000000000000071,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 40.0,
+      "median": 36.99,
+      "scale": 0.07413000000000106,
+      "mad": 0.05000000000000071,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 41.0,
+      "median": 36.99,
+      "scale": 0.07413000000000106,
+      "mad": 0.05000000000000071,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 42.0,
+      "median": 36.99,
+      "scale": 0.07413000000000106,
+      "mad": 0.05000000000000071,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 43.0,
+      "median": 36.995000000000005,
+      "scale": 0.08154299999998904,
+      "mad": 0.05499999999999261,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 44.0,
+      "median": 36.995000000000005,
+      "scale": 0.06671700000000252,
+      "mad": 0.045000000000001705,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 45.0,
+      "median": 37.0,
+      "scale": 0.07412999999999578,
+      "mad": 0.04999999999999716,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 46.0,
+      "median": 36.99,
+      "scale": 0.05930399999999873,
+      "mad": 0.03999999999999915,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 47.0,
+      "median": 36.985,
+      "scale": 0.06671700000000252,
+      "mad": 0.045000000000001705,
+      "n_values": 90,
+      "n_batches": 30
+    },
+    {
+      "variable": "temperature",
+      "hour": 48.0,
+      "median": 36.98,
+      "scale": 0.07412999999999578,
+      "mad": 0.04999999999999716,
+      "n_values": 60,
+      "n_batches": 30
+    }
+  ]
+}

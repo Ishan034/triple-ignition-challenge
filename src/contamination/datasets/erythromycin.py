@@ -26,11 +26,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..diagnosis import PROFILES_DIR
 from ..schema import MEASUREMENT_COLUMNS, VARIABLES
+from .common import write_campaign
 
 URL = "https://zenodo.org/records/14619074/files/EFP_long.csv?download=1"
 RAW_DIR = Path("data/external/erythromycin")
+CAMPAIGN_DIR = Path("data/erythromycin")  # converted campaign, committed
 COLUMNS = {
     "te": "temperature",
     "phzx": "ph",
@@ -41,6 +42,21 @@ COLUMNS = {
     "cer": "cer_efp",
 }
 REFERENCE_FRACTION = 0.6
+README = """\
+# Erythromycin fermentation campaign (converted)
+
+406 real industrial batches from an erythromycin plant (2022), converted for this
+project by `python -m contamination.datasets.erythromycin prepare`.
+
+Source: erythromycin fermentation process (EFP) data, Zenodo record 14619074
+(https://zenodo.org/records/14619074), licensed CC BY 4.0
+(https://creativecommons.org/licenses/by/4.0/). Changes: kept 7 clearly identified
+signals (temperature, online/offline pH, dissolved oxygen, agitation, OUR, CER),
+reshaped to one row per reading, and held final potency out as the batch outcome.
+
+There are no fault or contamination labels. The approved reference is in
+reference_batches.txt (the earliest 60% of batches by start time).
+"""
 
 
 def download(raw_dir: Path = RAW_DIR) -> Path:
@@ -52,7 +68,7 @@ def download(raw_dir: Path = RAW_DIR) -> Path:
     return target
 
 
-def convert(raw_csv: Path, out_dir: Path) -> dict[str, pd.DataFrame]:
+def convert(raw_csv: Path, out_dir: Path = CAMPAIGN_DIR) -> dict[str, pd.DataFrame]:
     d = pd.read_csv(raw_csv, parse_dates=["date"])
     missing = set(COLUMNS) | {"date", "batch_id", "hh", "hx"}
     if missing - set(d.columns):
@@ -105,11 +121,8 @@ def convert(raw_csv: Path, out_dir: Path) -> dict[str, pd.DataFrame]:
             "data_origin": "Erythromycin fermentation process, Zenodo 14619074, CC BY 4.0",
         }
     )
-    out_dir.mkdir(parents=True, exist_ok=True)
     result = {"measurements": m, "batches": batches, "outcomes": outcomes}
-    for name, df in result.items():
-        df.to_csv(out_dir / f"{name}.csv", index=False)
-    shutil.copy(PROFILES_DIR / "erythromycin.yaml", out_dir / "profile.yaml")
+    write_campaign(out_dir, result, "erythromycin", reference_batches(batches), README)
     return result
 
 
@@ -119,9 +132,9 @@ def reference_batches(batches: pd.DataFrame) -> list[str]:
     return ordered[: int(len(ordered) * REFERENCE_FRACTION)]
 
 
-def prepare(raw_dir: Path = RAW_DIR) -> Path:
-    convert(download(raw_dir), raw_dir / "campaign")
-    return raw_dir / "campaign"
+def prepare(raw_dir: Path = RAW_DIR, out_dir: Path = CAMPAIGN_DIR) -> Path:
+    convert(download(raw_dir), out_dir)
+    return out_dir
 
 
 def evaluate(campaign_dir: Path, out_dir: Path = Path("outputs/erythromycin")) -> dict:
@@ -224,11 +237,12 @@ def main() -> None:
     )
     parser.add_argument("command", choices=["prepare", "evaluate"])
     parser.add_argument("--raw-dir", type=Path, default=RAW_DIR)
+    parser.add_argument("--campaign", type=Path, default=CAMPAIGN_DIR)
     args = parser.parse_args()
     if args.command == "prepare":
-        print("campaign written to", prepare(args.raw_dir))
+        print("campaign written to", prepare(args.raw_dir, args.campaign))
     else:
-        evaluate(args.raw_dir / "campaign")
+        evaluate(args.campaign)
 
 
 if __name__ == "__main__":

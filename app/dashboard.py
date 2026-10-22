@@ -26,8 +26,9 @@ from contamination.pipeline import (
     diagnose_batch_as_of,
     diagnosis_timeline,
     first_named,
-    fit,
+    fit_cached,
     load_campaign,
+    measurements_path,
     run_campaign,
 )
 from contamination.schema import INVESTIGATION_COLUMNS, VARIABLES
@@ -43,6 +44,29 @@ CASE = "#2a78d6"
 TEMPLATE_DIR = Path("docs/data-template")
 IMPORT_ROOT = Path("data/imported")
 FEEDBACK_COLUMNS = ["batch_id", "variable", "detector", "start_h", "verdict", "note"]
+DATASETS = {
+    "Synthetic demo (simulated contamination)": "data/synthetic",
+    "IndPenSim (simulated penicillin, equipment faults)": "data/indpensim",
+    "Erythromycin plant (real batches, no labels)": "data/erythromycin",
+}
+OTHER = "Other folder…"
+BANNERS = {
+    "synthetic": (
+        "**Synthetic data**: a software demonstration on simulated batches, not real contamination "
+        "detection. The knowledge base is a draft that MaverickX scientists have not reviewed."
+    ),
+    "IndPenSim": (
+        "**IndPenSim**: a published high-fidelity simulation of an industrial 100,000 L penicillin "
+        "process (Goldrick et al. 2015, CC BY 4.0). Batches P091–P100 contain labelled **equipment "
+        "faults, not contamination**: any contamination call here would be wrong. Known outcomes "
+        "show the fault type and when it started."
+    ),
+    "Erythromycin": (
+        "**Erythromycin plant**: real hourly data from 406 industrial batches (Zenodo 14619074, "
+        "CC BY 4.0). There are **no fault or contamination labels**; final potency is held out as "
+        "the outcome. Flags mean *worth review*, not confirmed problems."
+    ),
+}
 
 st.set_page_config(page_title="Contamination investigation", page_icon="🧫", layout="wide")
 
@@ -50,10 +74,13 @@ st.set_page_config(page_title="Contamination investigation", page_icon="🧫", l
 # --------------------------------------------------------------------------- data
 
 
-@st.cache_resource(show_spinner="Loading campaign and fitting the reference profile…")
+@st.cache_resource(
+    show_spinner="Loading the campaign and fitting the reference profile "
+    "(the first time on a large dataset this takes a few minutes)…"
+)
 def get_campaign(data_dir: str, n_reference: int):
     campaign = load_campaign(data_dir, n_reference)
-    return campaign, fit(campaign)
+    return campaign, fit_cached(campaign)
 
 
 @st.cache_resource(show_spinner="Detecting, diagnosing and tracing sources…")
@@ -91,11 +118,26 @@ def get_timeline(data_dir: str, n_reference: int, batch_id: str, investigations_
 
 with st.sidebar:
     st.title("🧫 Contamination investigation")
-    data_dir = st.text_input("Campaign folder", st.session_state.get("data_dir", "data/synthetic"))
-    n_reference = st.number_input("Approved reference batches (earliest)", 5, 200, 30)
-    if not (Path(data_dir) / "measurements.csv").exists():
+    choices = {k: v for k, v in DATASETS.items() if measurements_path(v)}
+    for folder in sorted(IMPORT_ROOT.glob("*")) if IMPORT_ROOT.exists() else []:
+        if measurements_path(folder):
+            choices[f"Imported: {folder.name}"] = str(folder)
+    wanted = st.session_state.get("data_dir")
+    labels = list(choices) + [OTHER]
+    index = next((i for i, k in enumerate(labels) if choices.get(k) == wanted), 0)
+    dataset = st.selectbox("Dataset", labels, index=index)
+    data_dir = (
+        st.text_input("Campaign folder", wanted or "data/synthetic")
+        if dataset == OTHER
+        else choices[dataset]
+    )
+    if measurements_path(data_dir) is None:
         st.error(f"No measurements.csv in `{data_dir}`. Run `python -m contamination.demo` first.")
         st.stop()
+    has_list = (Path(data_dir) / "reference_batches.txt").exists()
+    n_reference = (
+        30 if has_list else st.number_input("Approved reference batches (earliest)", 5, 1000, 30)
+    )
     campaign, reference = get_campaign(data_dir, int(n_reference))
     if (
         "investigations_csv" not in st.session_state
@@ -119,23 +161,29 @@ with st.sidebar:
     show_truth = False
     if campaign.outcomes is not None:
         show_truth = st.toggle(
-            "Show simulated ground truth",
+            "Show known outcomes",
             value=False,
-            help="Evaluation only. The model never sees it.",
+            help="Evaluation only (simulated truth, fault labels or final potency). "
+            "The model never sees it.",
         )
-    st.caption(f"Reference `{reference.version}` · {len(reference.batch_ids)} batches")
+    st.caption(
+        f"Reference `{reference.version}` · {len(reference.batch_ids)} approved batches "
+        f"({campaign.reference_source}) · {len(campaign.monitored_ids)} monitored"
+    )
 
 kb = campaign.kb
 result = get_result(data_dir, int(n_reference), st.session_state["investigations_csv"])
-synthetic = (
-    campaign.outcomes is not None and (campaign.outcomes.get("data_origin") == "synthetic").any()
+origin = (
+    " ".join(campaign.outcomes["data_origin"].dropna().astype(str).unique())
+    if campaign.outcomes is not None and "data_origin" in campaign.outcomes
+    else ""
 )
-if synthetic:
-    st.warning(
-        "**Synthetic data**: a software demonstration on simulated batches, not real contamination "
-        "detection. The knowledge base is a draft that MaverickX scientists have not reviewed.",
-        icon="⚠️",
-    )
+synthetic = origin == "synthetic"
+for key, text in BANNERS.items():
+    if key in origin:
+        (st.warning if key == "synthetic" else st.info)(
+            text, icon="⚠️" if key == "synthetic" else "ℹ️"
+        )
 
 
 def truth_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -399,7 +447,12 @@ def page_batch():
 
     if show_truth and campaign.outcomes is not None:
         o = campaign.outcomes.set_index("batch_id").loc[batch_id]
-        st.info(f"Simulated ground truth: **{o['scenario']}**: {o['reason']}")
+        extra = (
+            f" · final potency {o['final_potency']:,.0f}"
+            if "final_potency" in o and pd.notna(o["final_potency"])
+            else ""
+        )
+        st.info(f"Known outcome: **{o['scenario']}**: {o['reason']}{extra}")
     st.plotly_chart(
         batch_figure(batch_id, scores, alerts, as_of), use_container_width=True, theme="streamlit"
     )

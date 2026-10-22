@@ -40,15 +40,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..diagnosis import PROFILES_DIR
 from ..schema import MEASUREMENT_COLUMNS, VARIABLES
+from .common import write_campaign
 
 ZIP_URL = (
     "https://data.mendeley.com/public-files/datasets/pdnjz7zz5x/files/"
     "e7007dff-4061-494f-a9f5-16c20f457d1d/file_downloaded"
 )
 RAW_DIR = Path("data/external/indpensim")
-CAMPAIGN_DIR = RAW_DIR / "campaign"
+CAMPAIGN_DIR = Path("data/indpensim")  # converted campaign, committed
 N_PROCESS_COLUMNS = 39  # the rest of each row is 2,200 Raman wavenumbers
 
 ONLINE = {
@@ -70,6 +70,22 @@ OFFLINE = {
 OFFLINE_DELAY_H = 4.0
 FAULT_COL = "Fault reference(Fault_ref:Fault ref)"
 CONTROL_COL = "0 - Recipe driven 1 - Operator controlled(Control_ref:Control ref)"
+
+README = """\
+# IndPenSim campaign (converted)
+
+100 simulated batches of a 100,000 L fed-batch penicillin process, converted for this
+project by `python -m contamination.datasets.indpensim prepare`.
+
+Source: Goldrick, S. et al. (2015) J. Biotechnol. 193:70-82; data: IndPenSim,
+Mendeley Data, doi:10.17632/pdnjz7zz5x.2, licensed CC BY 4.0
+(https://creativecommons.org/licenses/by/4.0/). Changes: kept hourly online values and
+the offline assays (with a 4 h result delay), temperature converted to degC, a subset of
+columns, synthetic start dates, and batch outcomes derived from the fault reference.
+
+Batches 91-100 contain equipment faults (not contamination). The approved reference is
+in reference_batches.txt (the first 20 normal batches of each control strategy).
+"""
 
 # IndPenSim's built-in fault types, recognised by the timing of their first window
 # (start h, end h), as coded in the simulator (PenSimPy peni_env_setup.py).
@@ -210,15 +226,12 @@ def convert(process_csv: Path, out_dir: Path = CAMPAIGN_DIR) -> dict[str, pd.Dat
     m["observation"] = None
     m = m[MEASUREMENT_COLUMNS]
 
-    out_dir.mkdir(parents=True, exist_ok=True)
     result = {
         "measurements": m,
         "batches": pd.DataFrame(batches),
         "outcomes": pd.DataFrame(outcomes),
     }
-    for name, df in result.items():
-        df.to_csv(out_dir / f"{name}.csv", index=False)
-    shutil.copy(PROFILES_DIR / "indpensim.yaml", out_dir / "profile.yaml")
+    write_campaign(out_dir, result, "indpensim", reference_batches(), README)
     return result
 
 
@@ -227,9 +240,9 @@ def reference_batches() -> list[str]:
     return [f"P{n:03d}" for n in list(range(1, 21)) + list(range(31, 51)) + list(range(61, 81))]
 
 
-def prepare(raw_dir: Path = RAW_DIR) -> Path:
-    convert(extract_process(download(raw_dir), raw_dir), raw_dir / "campaign")
-    return raw_dir / "campaign"
+def prepare(raw_dir: Path = RAW_DIR, out_dir: Path = CAMPAIGN_DIR) -> Path:
+    convert(extract_process(download(raw_dir), raw_dir), out_dir)
+    return out_dir
 
 
 def main() -> None:
@@ -238,13 +251,14 @@ def main() -> None:
     )
     parser.add_argument("command", choices=["prepare", "evaluate"])
     parser.add_argument("--raw-dir", type=Path, default=RAW_DIR)
+    parser.add_argument("--campaign", type=Path, default=CAMPAIGN_DIR)
     args = parser.parse_args()
     if args.command == "prepare":
-        print("campaign written to", prepare(args.raw_dir))
+        print("campaign written to", prepare(args.raw_dir, args.campaign))
     else:
         from .evaluate_external import evaluate_indpensim
 
-        evaluate_indpensim(args.raw_dir / "campaign")
+        evaluate_indpensim(args.campaign)
 
 
 if __name__ == "__main__":
