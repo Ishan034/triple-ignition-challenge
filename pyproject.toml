@@ -14,6 +14,7 @@ dependencies = [
     "streamlit>=1.38",
     "plotly>=5.22",
     "matplotlib>=3.9",
+    "openpyxl>=3.1",  # Excel exports in contamination.importer
 ]
 
 [project.optional-dependencies]

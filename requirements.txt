@@ -10,5 +10,6 @@ pyyaml==6.0.3
 streamlit==1.66.0
 plotly==7.1.0
 matplotlib==3.11.2
+openpyxl==3.1.5
 # Install this project's own package (src/contamination).
 .

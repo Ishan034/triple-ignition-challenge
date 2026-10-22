@@ -107,3 +107,21 @@ def test_custom_variables_are_registered():
     assert VARIABLES["base_pump_test"].unit == "%"
     with pytest.raises(ValueError):
         register_variables({"ph": {"unit": "x", "min_scale": 1, "plausible_range": [0, 1]}})
+
+
+def test_excel_exports(tmp_path):
+    pd.DataFrame({"Batch": ["X1"], "Start": ["2026-03-01 08:00"]}).to_excel(
+        tmp_path / "b.xlsx", index=False
+    )
+    pd.DataFrame(
+        {"Batch": ["X1", "X1"], "Time": ["2026-03-01 08:00", "2026-03-01 09:00"], "pH": [7.0, 6.9]}
+    ).to_excel(tmp_path / "m.xlsx", index=False)
+    mapping = {
+        "measurements": [
+            {"file": "m.xlsx", "batch_id": "Batch", "timestamp": "Time", "columns": {"pH": "ph"}}
+        ],
+        "batches": {"file": "b.xlsx", "columns": {"batch_id": "Batch", "start_time": "Start"}},
+    }
+    (tmp_path / "mapping.yaml").write_text(yaml.safe_dump(mapping))
+    res = convert(tmp_path / "mapping.yaml", tmp_path / "out")
+    assert res.tables["measurements"]["value"].tolist() == [7.0, 6.9]
