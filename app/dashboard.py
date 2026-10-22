@@ -16,9 +16,13 @@ import zipfile
 from pathlib import Path
 
 # Import the model from this checkout's src/, not from an installed copy. Streamlit
-# Cloud installs the package only when requirements.txt changes, so an installed copy
-# can lag behind the code that was pushed (an ImportError on new names).
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+# Cloud installs the package only when requirements.txt changes, and it keeps the
+# server process (with the modules it already imported) running across pushes, so the
+# model in memory can lag behind the code that was pushed (an ImportError on new names).
+SRC = Path(__file__).resolve().parents[1] / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+SRC_STAMP = max(p.stat().st_mtime for p in (SRC / "contamination").rglob("*.py"))
 
 import numpy as np
 import pandas as pd
@@ -26,6 +30,18 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
+_loaded = sys.modules.get("contamination")
+if _loaded is not None and (
+    not str(getattr(_loaded, "__file__", "")).startswith(str(SRC))
+    or getattr(_loaded, "_src_stamp", None) != SRC_STAMP
+):
+    # A stale model is loaded in this process: drop it, and the results cached with it.
+    for name in [m for m in sys.modules if m == "contamination" or m.startswith("contamination.")]:
+        del sys.modules[name]
+    st.cache_resource.clear()
+    st.cache_data.clear()
+
+import contamination
 from contamination.evaluate import per_batch
 from contamination.importer import convert, readiness
 from contamination.pipeline import (
@@ -39,6 +55,8 @@ from contamination.pipeline import (
 )
 from contamination.schema import INVESTIGATION_COLUMNS, VARIABLES
 from contamination.value import ValueInputs, estimate
+
+contamination._src_stamp = SRC_STAMP
 
 OBSERVED = "#2a78d6"
 BAND = "rgba(140, 140, 135, 0.22)"
