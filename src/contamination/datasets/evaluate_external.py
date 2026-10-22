@@ -7,8 +7,9 @@ What is measured, on batches NOT used to build the reference:
   such alert, and whether that alert came during the first fault window (+12 h).
   Alerts before the onset are counted as false alerts.
 * Diagnosis: the leading explanation per batch. The faults are equipment/actuator
-  faults, so "Biological contamination" leading on any batch is a wrong call; a
-  "raw-material or process-condition change" (H03) is the closest correct reading.
+  faults, so "Biological contamination" leading on any batch is a wrong call. The
+  correct reading is "Equipment or actuator fault" (H06), which needs the controller
+  outputs; "raw-material or process-condition change" (H03) is a defensible partial one.
 """
 
 from __future__ import annotations
@@ -106,6 +107,7 @@ def evaluate_indpensim(campaign_dir: Path, out_dir: Path = Path("outputs/indpens
         df.groupby(["category", "leading_explanation"]).size().rename("batches").reset_index()
     )
     contamination_leading = int((df["leading_id"] == "H01").sum())
+    equipment_leading = int(((df["leading_id"] == "H06") & (df["category"] != "normal")).sum())
 
     out_dir.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_dir / "batch_results.csv", index=False)
@@ -143,11 +145,15 @@ def evaluate_indpensim(campaign_dir: Path, out_dir: Path = Path("outputs/indpens
     print(
         f"\nBatches where contamination was the leading explanation: {contamination_leading} (all would be wrong)"
     )
+    print(
+        f"Fault batches read as an equipment or actuator fault: {equipment_leading}/{len(faults)}"
+    )
     return {
         "batches": df,
         "by_control": by_control,
         "faults": fault_summary,
         "leading": leading_counts,
+        "equipment_leading": equipment_leading,
         "reference": reference,
         "result": result,
         "campaign": campaign,

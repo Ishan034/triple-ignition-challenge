@@ -29,14 +29,35 @@ results below come from **seeds 11–30**, which were not used for tuning.
 |---|---|
 | Contaminated batches flagged after onset | 120 / 120 |
 | Non-contamination anomalies flagged (sensor spike, probe drift) | 120 / 120 |
-| "Normal"-category batches flagged (includes the 60 slow-growth batches) | 81 / 260 |
-| Median time from onset to first alert | ~7.8 h |
+| "Normal"-category batches flagged (includes the 60 slow-growth batches) | 83 / 260 |
+| Median time from onset to first alert | ~7.6 h |
 | Median lead time vs the simulated visual/odour note | 7.5 h (per-seed medians 5–9 h) |
-| False alerts per test batch | 1.9 |
+| False alerts per test batch | 2.0 |
+
+These use the current limit calibration (a 5% false-alarm budget, see below). With the
+earlier calibration (the single worst reference batch) the figures were 81 / 260, ~7.8 h,
+7.5 h and 1.9: on this simulated process the change makes almost no difference.
 
 The simple robust threshold gives the earliest alerts. EWMA and CUSUM add little on these
 simulated signals. CUSUM's calibrated limits are very high because each batch has a small
 constant offset that CUSUM keeps accumulating.
+
+### How the alert limits are set
+
+Each detector's limit is calibrated per variable by leave-one-out over the approved
+reference batches: every batch is scored against a reference built without it, giving
+one peak statistic per batch. Originally the limit sat 10% above the single worst batch.
+On real plant data one unusual reference batch then widens the limit for everyone (the
+erythromycin plant's pH limit came out at a robust z of about 50).
+
+The limit for single readings (robust threshold) is now tightened from there, step by
+step, while no more than a **false-alarm budget** of the approved batches would have
+alerted on any variable (default 5%). The budget is a batch-level rate, so it does not
+grow with the number of variables monitored, and it is the setting MaverickX would
+choose: how many normal batches in 100 they can afford to review. EWMA and CUSUM limits
+stay at the worst batch, because tightening them raised false alarms on IndPenSim. The
+budget was chosen while looking at the synthetic tuning seeds (1–10) and both external
+datasets, so it is not an unseen result (see `docs/external-validation.md`).
 
 ## Layer 5: diagnosis (process evidence only, seeds 11–30)
 
@@ -47,22 +68,22 @@ explanation was strong enough to lead, so the scientist is asked to investigate 
 
 | Review time | Scenario | Batches | Matched | Unresolved | Wrong |
 |---|---|---|---|---|---|
-| at first alert | contamination | 120 | 12 | 103 | 5 |
+| at first alert | contamination | 120 | 6 | 109 | 5 |
 | | probe drift | 60 | 0 | 59 | 1 |
 | | sensor spike | 60 | 2 | 57 | 1 |
 | | slow growth | 60 | 0 | 60 | 0 |
-| first alert + 4 h | contamination | 120 | 82 | 35 | 3 |
+| first alert + 4 h | contamination | 120 | 80 | 37 | 3 |
 | | probe drift | 60 | 0 | 57 | 3 |
 | | sensor spike | 60 | 60 | 0 | 0 |
-| | slow growth | 60 | 0 | 58 | 2 |
-| first alert + 8 h | contamination | 120 | 114 | 4 | 2 |
-| | probe drift | 60 | 56 | 1 | 3 |
+| | slow growth | 60 | 0 | 59 | 1 |
+| first alert + 8 h | contamination | 120 | 115 | 3 | 2 |
+| | probe drift | 60 | 55 | 1 | 4 |
 | | sensor spike | 60 | 60 | 0 | 0 |
 | | slow growth | 60 | 11 | 48 | 1 |
 | end of batch | contamination | 120 | 120 | 0 | 0 |
-| | probe drift | 60 | 58 | 1 | 1 |
+| | probe drift | 60 | 57 | 1 | 2 |
 | | sensor spike | 60 | 60 | 0 | 0 |
-| | slow growth | 60 | 58 | 2 | 0 |
+| | slow growth | 60 | 59 | 1 | 0 |
 
 **How to read it:**
 

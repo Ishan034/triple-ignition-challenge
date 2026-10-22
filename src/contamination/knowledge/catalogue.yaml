@@ -24,6 +24,15 @@ roles:
   ph: ph
   product: enzyme_activity
   temperature: temperature
+  # Controller outputs (optional). The synthetic proxy does not record them.
+  ph_control: not_measured           # e.g. base / acid pump output
+  temperature_control: not_measured  # e.g. cooling-water flow or valve position
+
+# Control loops: which controller output holds which variable, and whether raising
+# the output raises the variable (more base raises pH; more cooling lowers temperature).
+control_loops:
+  ph: {effort: ph_control, output_raises_variable: true}
+  temperature: {effort: temperature_control, output_raises_variable: false}
 
 parameters:
   leading_min_score: 2        # a single weak item (weight 1) cannot make an explanation "leading"
@@ -39,6 +48,7 @@ parameters:
   shift_min_points: 4         # growth-phase OD readings needed (fit uses 10-90% of final biomass)
   growth_phase_fraction: [0.1, 0.9]
   product_phase_min_activity: 20.0  # reference activity (U/mL) above which activity is assessable
+  control_response_z: 1.0     # a working controller pushes its output at least this far (robust z) against a drift
 
 evidence:
   E01:
@@ -93,6 +103,20 @@ evidence:
     name: Instrument check found no fault
     description: A probe/instrument check agreed with the online reading.
     independent: true
+  E17:
+    name: Controller working unusually hard while holding its variable
+    description: A controller output (e.g. base pump, cooling) deviates persistently while the variable it controls stays in range, so the process itself changed (e.g. extra acid or heat production).
+  E18:
+    name: Controlled variable drifts while its controller does not respond
+    description: A controlled variable (pH, temperature) drifts persistently while, at the start of the drift, its controller output stays at or below normal instead of pushing back, pointing at the actuator (pump, valve, cooling supply).
+  E19:
+    name: Equipment check found a fault
+    description: A pump, valve, line or utility check found a fault.
+    independent: true
+  E20:
+    name: Equipment check found no fault
+    description: A pump, valve, line or utility check found the equipment working.
+    independent: true
 
 hypotheses:
   H01:
@@ -100,9 +124,9 @@ hypotheses:
     description: An unwanted organism is growing in the culture.
     # E01 and E06 are weak here: any process difference can cause them. The
     # contamination-specific items are E05, E08 (and E07) plus independent tests.
-    supports: {E01: 1, E05: 2, E06: 1, E07: 1, E08: 2, E10: 1, E12: 3}
+    supports: {E01: 1, E05: 2, E06: 1, E07: 1, E08: 2, E10: 1, E12: 3, E17: 1}
     leading_requires_any: [E05, E08, E10, E12]
-    contradicts: {E03: 2, E04: 2, E09: 2, E13: 3}
+    contradicts: {E03: 2, E04: 2, E09: 2, E13: 3, E18: 2}
   H02:
     name: Expected process variation (delayed / slow growth)
     description: The production organism is growing more slowly or starting later, e.g. inoculum age.
@@ -112,15 +136,23 @@ hypotheses:
   H03:
     name: Raw-material or process-condition change
     description: A change in medium, feed or setpoints is altering the culture.
-    supports: {E01: 1, E14: 2}
+    supports: {E01: 1, E14: 2, E17: 1}
     leading_requires_any: [E14]
-    contradicts: {E03: 1, E09: 1, E12: 2}
+    contradicts: {E03: 1, E09: 1, E12: 2, E18: 2}
   H04:
-    name: Measurement or equipment fault
+    name: Measurement fault (sensor or probe)
     description: A sensor, probe or sampling problem, not a change in the culture.
     supports: {E02: 1, E03: 3, E09: 3, E11: 1, E15: 3}
     leading_requires_any: [E03, E09, E15]
-    contradicts: {E01: 3, E10: 1, E12: 2, E16: 3}
+    # A probe that reads falsely low/high makes its controller push harder, so a
+    # controller that does not respond (E18) argues against a measurement fault.
+    contradicts: {E01: 3, E10: 1, E12: 2, E16: 3, E18: 2}
+  H06:
+    name: Equipment or actuator fault
+    description: A pump, valve, cooling or aeration supply is not delivering what the controller asks for, so the culture is pushed off its normal path.
+    supports: {E18: 3, E19: 3}
+    leading_requires_any: [E18, E19]
+    contradicts: {E12: 2, E20: 3}
   H05:
     name: Unresolved / previously unseen cause
     description: The evidence does not clearly support any catalogued explanation.
@@ -171,6 +203,13 @@ checks:
     relative_cost: low
     positive: E12
     negative: E13
+  T07:
+    name: Check the actuators (pump and valve status, flow totaliser vs demand, cooling supply)
+    discriminates: [H06, H03]
+    turnaround_h: 0.5
+    relative_cost: low
+    positive: E19
+    negative: E20
   T06:
     name: Targeted qPCR for a suspected contaminant
     discriminates: [H01]

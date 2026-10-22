@@ -15,6 +15,7 @@ behaviour, not real-world performance.
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -28,22 +29,24 @@ from .evaluate import (
     review_anchor_times,
 )
 from .ingest import validate_measurements
-from .monitor import DEFAULT_CONFIG, fit_reference
+from .monitor import DEFAULT_CONFIG, MonitorConfig, fit_reference
 from .synthetic import generate_dataset
 from .tracing import batch_statuses, trace_sources
 
 REVIEW_DELAYS = (("at first alert", 0.0), ("first alert + 4 h", 4.0), ("first alert + 8 h", 8.0))
 
 
-def run_seed(seed: int, n_reference: int = 30) -> tuple[dict, pd.DataFrame]:
+def run_seed(
+    seed: int, n_reference: int = 30, config: MonitorConfig = DEFAULT_CONFIG
+) -> tuple[dict, pd.DataFrame]:
     ds = generate_dataset(seed=seed, n_reference=n_reference)
     m = validate_measurements(ds.measurements).measurements
     ordered = ds.batches.sort_values("start_time")["batch_id"].tolist()
-    reference = fit_reference(m, ordered[:n_reference], DEFAULT_CONFIG)
+    reference = fit_reference(m, ordered[:n_reference], config)
     test = m[m["batch_id"].isin(ordered[n_reference:])]
     outcomes = ds.outcomes[ds.outcomes["batch_id"].isin(ordered[n_reference:])]
 
-    full = diagnose(test, reference, DEFAULT_CONFIG)
+    full = diagnose(test, reference, config)
     detection = evaluate(full.monitor_result.alerts, outcomes)
     statuses = batch_statuses(full, ordered[n_reference:], ordered[:n_reference])
     tracing = evaluate_tracing(trace_sources(ds.batches, statuses), ds.outcomes)
@@ -51,9 +54,7 @@ def run_seed(seed: int, n_reference: int = 30) -> tuple[dict, pd.DataFrame]:
     tables = {}
     for label, delay in REVIEW_DELAYS:
         parts = [
-            diagnose(
-                test[test["batch_id"] == b], reference, DEFAULT_CONFIG, as_of_h=t + delay
-            ).table()
+            diagnose(test[test["batch_id"] == b], reference, config, as_of_h=t + delay).table()
             for b, t in anchors.items()
         ]
         tables[label] = pd.concat(parts, ignore_index=True)
@@ -63,10 +64,10 @@ def run_seed(seed: int, n_reference: int = 30) -> tuple[dict, pd.DataFrame]:
     return {"seed": seed, **detection, **tracing}, diag
 
 
-def run(seeds) -> tuple[pd.DataFrame, pd.DataFrame]:
+def run(seeds, config: MonitorConfig = DEFAULT_CONFIG) -> tuple[pd.DataFrame, pd.DataFrame]:
     detection, diagnosis = [], []
     for seed in seeds:
-        d, g = run_seed(seed)
+        d, g = run_seed(seed, config=config)
         detection.append(d)
         diagnosis.append(g)
     diag = pd.concat(diagnosis, ignore_index=True)
@@ -86,9 +87,33 @@ def main() -> None:
     )
     parser.add_argument("--seeds", type=int, nargs=2, default=(11, 31), metavar=("FIRST", "STOP"))
     parser.add_argument("--out", type=Path, default=Path("outputs/robustness"))
+    parser.add_argument(
+        "--quantile",
+        type=float,
+        default=DEFAULT_CONFIG.calibration_quantile,
+        help="calibration quantile for the EWMA and CUSUM limits",
+    )
+    parser.add_argument(
+        "--threshold-quantile",
+        type=float,
+        default=DEFAULT_CONFIG.threshold_calibration_quantile,
+        help="calibration quantile for the robust-threshold limit",
+    )
+    parser.add_argument(
+        "--budget",
+        type=float,
+        default=DEFAULT_CONFIG.false_alarm_budget,
+        help="share of approved batches allowed to alert in calibration (tightens the robust threshold)",
+    )
     args = parser.parse_args()
 
-    detection, totals = run(range(*args.seeds))
+    config = replace(
+        DEFAULT_CONFIG,
+        calibration_quantile=args.quantile,
+        threshold_calibration_quantile=args.threshold_quantile,
+        false_alarm_budget=args.budget,
+    )
+    detection, totals = run(range(*args.seeds), config)
     args.out.mkdir(parents=True, exist_ok=True)
     detection.to_csv(args.out / "detection_by_seed.csv", index=False)
     totals.to_csv(args.out / "diagnosis_totals.csv", index=False)

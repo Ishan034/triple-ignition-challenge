@@ -2,8 +2,9 @@
 
 A *campaign* is a folder with ``measurements.csv`` and ``batches.csv``, plus
 optional ``investigations.csv`` (recorded check results), ``outcomes.csv`` (known
-answers, used only for evaluation and never by the model) and ``profile.yaml`` (a
-process profile adapting the rule book's roles to this process's variables).
+answers, used only for evaluation and never by the model), ``profile.yaml`` (a
+process profile adapting the rule book's roles to this process's variables) and
+``variables.yaml`` (process-specific variables, written by ``contamination.importer``).
 """
 
 from __future__ import annotations
@@ -11,9 +12,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from .diagnosis import DiagnosisResult, Knowledge, diagnose, load_knowledge
+from .importer import load_variables
 from .ingest import (
     IngestResult,
     load_batches,
@@ -49,6 +52,7 @@ def load_campaign(
     them, the earliest ``n_reference`` batches are used (the synthetic demo's rule).
     """
     d = Path(data_dir)
+    load_variables(d)
     batches = load_batches(d / "batches.csv")
     ingest = load_measurements(
         d / "measurements.csv", batches.set_index("batch_id")["start_time"].to_dict()
@@ -144,3 +148,43 @@ def diagnose_batch_as_of(
         as_of_h=as_of_h,
         kb=campaign.kb,
     )
+
+
+def diagnosis_timeline(
+    campaign: Campaign,
+    reference: ReferenceProfile,
+    batch_id: str,
+    investigations: pd.DataFrame,
+    config: MonitorConfig = DEFAULT_CONFIG,
+    max_points: int = 40,
+) -> pd.DataFrame:
+    """How the assessment of one batch developed: replayed at regular hours from its
+    first alert to the end, using only what was available at each hour."""
+    m = campaign.measurements
+    m = m[m["batch_id"] == batch_id]
+    full = diagnose(m, reference, config, investigations, kb=campaign.kb).reports.get(batch_id)
+    if full is None or not full.alerts:
+        return pd.DataFrame(columns=["hour", "leading_id", "leading_explanation", "alerts"])
+    start = min(a.first_raised_h for a in full.alerts)
+    end = float(m["available_h"].max())
+    step = max(1.0, round((end - start) / max_points))
+    rows = []
+    for h in np.arange(start, end + step, step):
+        r = diagnose(m, reference, config, investigations, as_of_h=float(h), kb=campaign.kb)
+        rep = r.reports.get(batch_id)
+        lead = rep.leading if rep else None
+        rows.append(
+            {
+                "hour": float(h),
+                "leading_id": lead.id if lead else "",
+                "leading_explanation": lead.name if lead else "no alerts yet",
+                "alerts": len(rep.alerts) if rep else 0,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def first_named(timeline: pd.DataFrame) -> pd.DataFrame:
+    """The first replay hour at which each explanation became the leading one."""
+    named = timeline[~timeline["leading_id"].isin(("", "H05"))]
+    return named.groupby(["leading_id", "leading_explanation"], as_index=False)["hour"].min()

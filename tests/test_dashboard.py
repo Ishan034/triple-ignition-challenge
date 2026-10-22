@@ -52,3 +52,31 @@ def test_tracing_page():
 def test_about_page():
     at = _app("How it works")
     assert any("Limits" in h.value for h in at.subheader)
+
+
+def test_batch_page_development_and_feedback():
+    at = _app("Batch investigation")
+    assert any("first leading at (h)" in str(df.value.columns.tolist()) for df in at.dataframe)
+    verdict = next(r for r in at.radio if r.label == "Verdict")
+    verdict.set_value("false alarm")
+    next(t for t in at.text_input if t.label.startswith("Note (")).set_value("probe recalibrated")
+    next(b for b in at.button if b.label == "Save feedback").click()
+    at.run()
+    assert not at.exception
+    assert any("false alarm" in str(df.value.to_dict()) for df in at.dataframe)
+
+
+def test_timing_page():
+    at = _app("Detection timing")
+    labels = [m.label for m in at.metric]
+    assert "Median lead over today's method" in labels
+
+
+def test_value_page():
+    at = _app("Value estimate")
+    assert any(m.label.startswith("Net value per year") for m in at.metric)
+
+
+def test_load_page():
+    at = _app("Load your data")
+    assert any(h.value == "Load your data" for h in at.header)

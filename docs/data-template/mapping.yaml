@@ -1,0 +1,69 @@
+# Example mapping: how a plant's exports map onto the campaign tables.
+# Copy this file next to your own exports and change file and column names to match.
+process_name: Example enzyme fermentation (synthetic demo data)
+
+# Variables the built-in list does not have. Each needs a unit, a noise floor
+# (min_scale: the smallest spread that counts as real) and a plausible range.
+variables: {}
+
+measurements:
+  - file: historian_export.csv     # online signals, one column per signal ("wide")
+    layout: wide
+    batch_id: Batch
+    timestamp: Time
+    source: online_sensor
+    columns:                        # export column -> variable name
+      pH: ph
+      Temp (C): temperature
+      DO (%sat): dissolved_oxygen
+  - file: lab_results.csv          # offline results, one row per result ("long")
+    layout: long
+    batch_id: Batch
+    timestamp: Sampled              # when the sample was taken
+    available_at: Reported          # when the result came back
+    variable: Test
+    value: Result
+    unit: Units
+    source: offline_assay
+    variable_map:                   # test name in the export -> variable name
+      OD600: biomass_od600
+      Amylase activity: enzyme_activity
+
+observations:                       # timestamped operator notes (smell, colour, foam)
+  - file: operator_notes.csv
+    batch_id: Batch
+    timestamp: Time
+    text: Note
+
+batches:
+  file: batch_records.csv
+  columns:                          # campaign column -> export column
+    batch_id: Batch
+    start_time: Inoculated
+    bioreactor_id: Vessel
+    medium_lot: Medium lot
+    inoculum_lot: Seed lot
+
+outcomes:                           # kept apart from measurements; used only to evaluate
+  file: batch_outcomes.csv
+  columns:
+    batch_id: Batch
+    category: Outcome
+    onset_h: Problem started (h)     # elapsed hours, if known (e.g. from a later investigation)
+    reference_event_h: First noticed (h)  # when today's checks first noticed it
+    reason: Comment
+  category_map:
+    OK: normal
+    Contaminated: contamination
+    Other problem: non_contamination_anomaly
+
+# Which variable plays each role in the diagnosis rules. Controller outputs
+# (ph_control, temperature_control) are optional: "not_measured" if not recorded.
+roles:
+  biomass: biomass_od600
+  oxygen: dissolved_oxygen
+  ph: ph
+  product: enzyme_activity
+  temperature: temperature
+  ph_control: not_measured
+  temperature_control: not_measured

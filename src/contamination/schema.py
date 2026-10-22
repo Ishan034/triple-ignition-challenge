@@ -42,6 +42,11 @@ VARIABLES: dict[str, VariableSpec] = {
     "substrate": VariableSpec("g/L", 0.001, (0.0, 500.0), "Substrate concentration"),
     "biomass_offline": VariableSpec("g/L", 0.1, (0.0, 200.0), "Biomass (offline assay)"),
     "penicillin_offline": VariableSpec("g/L", 0.1, (0.0, 200.0), "Penicillin (offline assay)"),
+    # Controller outputs: how hard the pH and temperature loops work.
+    "base_flow": VariableSpec("L/h", 1.0, (0.0, 5000.0), "Base flow (pH controller output)"),
+    "coolant_flow": VariableSpec(
+        "L/h", 1.0, (0.0, 20000.0), "Cooling-water flow (temperature controller output)"
+    ),
     # Erythromycin fermentation plant data (Zenodo 14619074). Units are not documented
     # in the dataset; "as logged" marks that. Ranges exclude the logger's sentinel codes.
     "ph_offline": VariableSpec("pH", 0.02, (0.0, 14.0), "pH (offline)"),

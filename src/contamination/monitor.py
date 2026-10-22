@@ -2,9 +2,10 @@
 
 * :func:`fit_reference` builds the reference from approved normal batches and
   calibrates each detector's limit per variable. The calibration is leave-one-out:
-  each approved batch is scored against a reference built *without* it, and the limit
-  is set so no approved batch would have alerted (and never below the textbook
-  default). The limits are then frozen into the versioned profile.
+  each approved batch is scored against a reference built *without* it, giving one
+  peak statistic per batch. The limit is a margin above a high percentile of those
+  peaks (``calibration_quantile``; 1.0 = the single worst batch), and never below the
+  textbook default. The limits are then frozen into the versioned profile.
 * :func:`monitor` scores batches against a frozen profile and returns structured
   alerts. With ``as_of_h`` it only uses results available by that elapsed hour, as
   the system would have seen them at that point in the batch.
@@ -36,6 +37,18 @@ class MonitorConfig:
     cusum_k: float = 0.5
     cusum_h: float = 5.0
     calibration_margin: float = 1.1
+    # Percentile of the approved batches' leave-one-out peaks that sets each limit.
+    # 1.0 takes the single worst approved batch, so one outlier in the reference
+    # widens the limit for everyone; a lower value accepts that a few approved
+    # batches would have alerted, in exchange for tighter limits. The robust threshold
+    # reacts to single readings, so its worst batch is usually one glitch; EWMA and
+    # CUSUM accumulate, so their peaks reflect a whole trajectory. Hence two settings.
+    calibration_quantile: float = 1.0  # EWMA and CUSUM
+    threshold_calibration_quantile: float = 1.0  # robust threshold (starting point)
+    # Share of approved batches allowed to alert in leave-one-out calibration. When set,
+    # the robust-threshold limit is tightened from the quantile above until this budget
+    # is reached. None keeps the quantiles as given.
+    false_alarm_budget: float | None = 0.05
     corroboration_window_h: float = 3.0
     detectors: tuple[str, ...] = ("robust_threshold", "ewma", "cusum")
 
@@ -82,6 +95,51 @@ def score(
     return data.reset_index(drop=True)
 
 
+def loo_peak_statistics(
+    measurements: pd.DataFrame, approved: list[str], config: MonitorConfig
+) -> dict[str, dict[str, dict[str, float]]]:
+    """Per detector and variable: each approved batch's peak |statistic| when scored
+    against a reference built without it (batch id -> peak)."""
+    peaks: dict[str, dict[str, dict[str, float]]] = {
+        d: {v: {} for v in VARIABLES} for d in DETECTORS
+    }
+    for held_out in approved:
+        ref = build_reference(measurements, [b for b in approved if b != held_out], config.window_h)
+        s = score(measurements[measurements["batch_id"] == held_out], ref, config)
+        for d in DETECTORS:
+            batch_peaks = s.groupby("variable")[f"stat_{d}"].apply(
+                lambda x: np.nanmax(np.abs(x)) if x.notna().any() else np.nan
+            )
+            for v, peak in batch_peaks.items():
+                if np.isfinite(peak):
+                    peaks[d][v][held_out] = float(peak)
+    return peaks
+
+
+def _limits(peaks, quantiles: dict[str, float], defaults: dict, margin: float) -> dict:
+    return {
+        d: {
+            v: round(
+                max(
+                    defaults[d],
+                    margin * float(np.quantile(list(peaks[d][v].values()), quantiles[d]))
+                    if peaks[d][v]
+                    else 0.0,
+                ),
+                4,
+            )
+            for v in VARIABLES
+        }
+        for d in DETECTORS
+    }
+
+
+def _alerting_batches(peaks, limits: dict, detectors) -> set[str]:
+    return {
+        b for d in detectors for v in VARIABLES for b, p in peaks[d][v].items() if p > limits[d][v]
+    }
+
+
 def fit_reference(
     measurements: pd.DataFrame, approved_batch_ids, config: MonitorConfig = DEFAULT_CONFIG
 ) -> ReferenceProfile:
@@ -94,31 +152,53 @@ def fit_reference(
     defaults = default_limits(
         config.ewma_lambda, config.ewma_L, config.robust_limit, config.cusum_h
     )
-
-    loo_max = {d: {v: 0.0 for v in VARIABLES} for d in DETECTORS}
-    for held_out in approved:
-        ref = build_reference(measurements, [b for b in approved if b != held_out], config.window_h)
-        s = score(measurements[measurements["batch_id"] == held_out], ref, config)
-        for d in DETECTORS:
-            peaks = s.groupby("variable")[f"stat_{d}"].apply(
-                lambda x: np.nanmax(np.abs(x)) if x.notna().any() else 0.0
-            )
-            for v, peak in peaks.items():
-                loo_max[d][v] = max(loo_max[d][v], float(peak))
-
-    thresholds = {
-        d: {
-            v: round(max(defaults[d], config.calibration_margin * loo_max[d][v]), 4)
-            for v in VARIABLES
-        }
+    quantiles = {
+        d: config.threshold_calibration_quantile
+        if d == "robust_threshold"
+        else config.calibration_quantile
         for d in DETECTORS
     }
+    if not all(0.5 <= q <= 1.0 for q in quantiles.values()):
+        raise ValueError("calibration quantiles must be between 0.5 and 1.0")
+
+    peaks = loo_peak_statistics(measurements, approved, config)
+    margin = config.calibration_margin
+    if config.false_alarm_budget is not None:
+        # Tighten the robust-threshold limit step by step while the share of approved
+        # batches that would have alerted (on any variable, any detector) stays within
+        # the budget. The budget is a batch-level false-alarm rate, so it does not grow
+        # with the number of monitored variables.
+        allowed = config.false_alarm_budget * len(approved)
+        for q in np.round(np.arange(quantiles["robust_threshold"], 0.795, -0.005), 3):
+            trial = {**quantiles, "robust_threshold": float(q)}
+            alerting = _alerting_batches(
+                peaks, _limits(peaks, trial, defaults, margin), config.detectors
+            )
+            if len(alerting) > allowed:
+                break
+            quantiles = trial
+    thresholds = _limits(peaks, quantiles, defaults, margin)
+    alerting = _alerting_batches(peaks, thresholds, config.detectors)
     calibration = {
-        "method": "leave-one-out over approved batches; limit = max(default, margin * max |statistic|)",
+        "method": (
+            "leave-one-out over approved batches; limit = max(default, margin * "
+            "quantile of per-batch peak |statistic|)"
+            + (
+                f"; robust-threshold quantile chosen so at most {config.false_alarm_budget:.0%} "
+                "of approved batches would alert"
+                if config.false_alarm_budget is not None
+                else ""
+            )
+        ),
+        "quantiles": quantiles,
         "default_limits": {k: round(v, 4) for k, v in defaults.items()},
         "loo_max_statistic": {
-            d: {v: round(x, 4) for v, x in vs.items()} for d, vs in loo_max.items()
+            d: {v: round(max(p.values()), 4) if p else 0.0 for v, p in vs.items()}
+            for d, vs in peaks.items()
         },
+        # Approved batches that would have alerted under the frozen limits: the price
+        # of tighter limits, recorded so reviewers can see it.
+        "approved_batches_alerting": sorted(alerting),
         "config": asdict(config),
     }
     return build_reference(measurements, approved, config.window_h).with_thresholds(

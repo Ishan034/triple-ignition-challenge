@@ -1,0 +1,5 @@
+Batch,Outcome,Problem started (h),First noticed (h),Comment
+B001,OK,,,Simulated normal batch
+B002,OK,,,Simulated normal batch
+B031,Contaminated,17.02,31.0,Simulated bacterial contaminant from 17.02 h
+B044,Other problem,16.0,,Simulated DO probe drift from 16.0 h

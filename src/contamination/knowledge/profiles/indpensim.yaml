@@ -9,6 +9,8 @@ roles:
   ph: ph
   product: penicillin_offline   # offline assay, every 12 h, ~4 h delay
   temperature: temperature
+  ph_control: base_flow         # base pump flow (pH loop output)
+  temperature_control: coolant_flow  # cooling-water flow (temperature loop output)
 parameters:
   product_phase_min_activity: 2.0   # g/L penicillin before product comparisons apply
   shift_search_h: [-12, 24]         # longer process, so larger timing shifts are plausible

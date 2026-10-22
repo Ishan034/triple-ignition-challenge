@@ -1,6 +1,6 @@
 <!-- Example output of python -m contamination.demo (synthetic batch B031). Regenerate rather than edit. -->
 # Batch investigation report: B031
-*full record · reference 639228991cfe · knowledge base: draft - requires MaverickX scientist review*
+*full record · reference c3a42a7b2a1b · knowledge base: draft - requires MaverickX scientist review*
 
 ## 1. What changed?
 - **ph**: low from 26 h (first raised 26 h, persistent); peak observed 6.57 vs reference 6.75 (robust z -9.1); detectors: cusum, ewma, robust_threshold
@@ -15,7 +15,10 @@
 - **Raw-material or process-condition change** (H03): not supported, score -1
   - supporting: E01 Several signals deviate together
   - contradicting: E12 Confirmatory test positive
-- **Measurement or equipment fault** (H04): not supported, score -6
+- **Equipment or actuator fault** (H06): not supported, score -2
+  - supporting: none
+  - contradicting: E12 Confirmatory test positive
+- **Measurement fault (sensor or probe)** (H04): not supported, score -6
   - supporting: none
   - contradicting: E01 Several signals deviate together, E10 Visual / odour observation recorded, E12 Confirmatory test positive
 - **Expected process variation (delayed / slow growth)** (H02): not supported, score -8
@@ -24,13 +27,14 @@
 - **Unresolved / previously unseen cause** (H05): fallback, score +0
 
 ## 3. What information is missing?
-- Nothing flagged as missing.
+- E17 Controller working unusually hard while holding its variable: No controller outputs are recorded for this process.
+- E18 Controlled variable drifts while its controller does not respond: No controller outputs are recorded for this process.
 
 ## 4. Assessment (dimensions kept separate)
 - **leading explanation**: Biological contamination
 - **contamination evidence**: confirmed by independent test
 - **process deviation**: substantially abnormal
-- **quality impact**: deviation established (enzyme activity below reference from 36 h)
+- **quality impact**: deviation established (enzyme_activity below reference from 36 h)
 - **affected scope**: linked cases B035, B040, B045 via medium lot M-12, inoculum lot I-07
 - **confidence**: strong (supported by an independent test)
 
@@ -42,8 +46,8 @@
 
 ## 6. Recommended next checks
 1. Review batch record (inoculum age, medium lot, setpoints, operator notes) (~0.5 h, low cost): informative about Raw-material or process-condition change (H03)
-2. Plate count on selective medium (~36 h, low cost): informative about Biological contamination (H01)
-3. Targeted qPCR for a suspected contaminant (~4 h, high cost): informative about Biological contamination (H01)
+2. Check the actuators (pump and valve status, flow totaliser vs demand, cooling supply) (~0.5 h, low cost): informative about Raw-material or process-condition change (H03)
+3. Plate count on selective medium (~36 h, low cost): informative about Biological contamination (H01)
 
 ## 7. Scientist decision
 - Reviewed by: ____  ·  Checks performed: ____  ·  Final assessment: ____
@@ -53,7 +57,7 @@
 - E02 Only one signal deviates: **absent**. Variables alerted: biomass_od600, dissolved_oxygen, enzyme_activity, ph.
 - E03 Isolated reading(s) that return to normal: **absent**. Threshold alerts are not limited to isolated readings.
 - E04 Trajectory is delayed but otherwise normal: **absent**. Growth phase best fits the reference shifted -1 h (median |z| 0.16 vs 0.62 unshifted, 6 readings).
-- E05 Biomass / turbidity above reference: **present**. OD600 above reference from 32 h.
+- E05 Biomass / turbidity above reference: **present**. Biomass above reference from 32 h.
 - E06 Low enzyme activity for the amount of biomass: **present**. Activity low with normal/high biomass at 36 h, 40 h, 44 h, 48 h.
 - E07 Culture more acidic than expected: **present**. pH below reference from 26 h.
 - E08 Extra oxygen demand with high biomass: **present**. DO low while OD600 high at 19 reading(s).
@@ -65,5 +69,9 @@
 - E14 Process condition deviation: **absent**. No persistent low alert on temperature.
 - E15 Instrument check found a fault: **unknown**. Not checked yet (T02 would tell).
 - E16 Instrument check found no fault: **unknown**. Not checked yet (T02 would tell).
+- E17 Controller working unusually hard while holding its variable: **unknown**. No controller outputs are recorded for this process.
+- E18 Controlled variable drifts while its controller does not respond: **unknown**. No controller outputs are recorded for this process.
+- E19 Equipment check found a fault: **unknown**. Not checked yet (T07 would tell).
+- E20 Equipment check found no fault: **unknown**. Not checked yet (T07 would tell).
 
 > Decision support only. Rankings order explanations for scientist review. They are not probabilities, and no organism is identified from process data. The knowledge base is a draft that has not been validated by MaverickX scientists.

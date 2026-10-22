@@ -37,6 +37,10 @@ CATALOGUE_PATH = Path(__file__).parent / "knowledge" / "catalogue.yaml"
 # Process roles the evidence rules refer to; each catalogue maps them to its own
 # variable names (e.g. biomass -> biomass_od600 for the alpha-amylase proxy).
 ROLES = ("biomass", "oxygen", "ph", "product", "temperature")
+# Controller outputs (e.g. base pump, cooling-water valve). Optional: a process that does
+# not record them maps them to "not_measured" and the evidence that needs them is unknown.
+OPTIONAL_ROLES = ("ph_control", "temperature_control")
+NOT_MEASURED = "not_measured"
 COST_RANK = {"low": 0, "medium": 1, "high": 2}
 CAVEAT = (
     "Decision support only. Rankings order explanations for scientist review. They are "
@@ -55,11 +59,19 @@ class Knowledge:
     always_consider: dict = field(default_factory=dict)
     source_tracing: dict = field(default_factory=dict)
     roles: dict = field(default_factory=dict)
+    control_loops: dict = field(default_factory=dict)
 
     @property
     def linked(self) -> tuple[str, ...]:
         """Variables expected to move together in a real culture change."""
         return (self.roles["ph"], self.roles["oxygen"], self.roles["biomass"])
+
+    @property
+    def control_variables(self) -> set[str]:
+        """Measured controller outputs: they show how hard a loop works, not the culture."""
+        return {
+            self.roles[r] for r in OPTIONAL_ROLES if self.roles.get(r, NOT_MEASURED) != NOT_MEASURED
+        }
 
 
 PROFILES_DIR = CATALOGUE_PATH.parent / "profiles"
@@ -105,10 +117,16 @@ def load_knowledge(
         for res in ("positive", "negative"):
             if res in c and c[res] not in known:
                 raise ValueError(f"{cid} {res} result maps to undefined evidence {c[res]}")
-    roles = d.get("roles", {})
+    roles = {**{r: NOT_MEASURED for r in OPTIONAL_ROLES}, **d.get("roles", {})}
     missing = set(ROLES) - set(roles)
     if missing:
         raise ValueError(f"catalogue roles missing: {sorted(missing)}")
+    loops = d.get("control_loops", {})
+    for controlled, loop in loops.items():
+        if controlled not in ROLES or loop.get("effort") not in OPTIONAL_ROLES:
+            raise ValueError(
+                f"control loop {controlled} -> {loop.get('effort')} uses unknown roles"
+            )
     return Knowledge(
         d["review_status"],
         d["parameters"],
@@ -118,6 +136,7 @@ def load_knowledge(
         d.get("always_consider", {}),
         d.get("source_tracing", {}),
         roles,
+        loops,
     )
 
 
@@ -377,6 +396,77 @@ def _decoupled(
     return "absent", "Deviations are accompanied by changes in linked signals."
 
 
+def _control_loop_evidence(
+    s: pd.DataFrame, alerts: list[Alert], p: dict, kb: Knowledge
+) -> tuple[tuple[str, str], tuple[str, str]]:
+    """E17 (a controller works unusually hard while holding its variable in range) and
+    E18 (a controlled variable drifts while its controller output does not respond).
+
+    A healthy loop answers a drift in its variable by pushing its output in the
+    correcting direction. If the variable drifts and the output stays at or below its
+    normal level, the actuator (pump, valve, cooling supply) is the first suspect.
+    """
+    r, dz = kb.roles, p["deviation_z"]
+    measured = [
+        (controlled, loop)
+        for controlled, loop in kb.control_loops.items()
+        if r.get(loop["effort"], NOT_MEASURED) != NOT_MEASURED
+        and len(_var(s, r[loop["effort"]]))
+        and len(_var(s, r[controlled]))
+    ]
+    if not measured:
+        why = "No controller outputs are recorded for this process."
+        return ("unknown", why), ("unknown", why)
+
+    working, unresponsive, notes = [], [], []
+    for controlled, loop in measured:
+        cvar, evar = r[controlled], r[loop["effort"]]
+        effort = _var(s, evar)
+        effort = effort[effort["z"].notna()]
+        level = _var(s, cvar)
+        level = level[level["z"].notna()]
+        # E18: the controlled variable drifts persistently; which way should the output move?
+        for a in alerts:
+            if a.variable != cvar or a.persistence != "persistent":
+                continue
+            raise_needed = a.direction == "low"
+            needed = "high" if raise_needed == bool(loop["output_raises_variable"]) else "low"
+            # Judge the response where the drift begins: later in a long episode the
+            # fault may have cleared and the controller be catching up.
+            win = effort[
+                effort["elapsed_h"].between(a.start_h - 2, min(a.end_h, a.start_h + 3) + 0.5)
+            ]
+            if len(win) < 2:
+                continue
+            push = win["z"] if needed == "high" else -win["z"]
+            if float(push.median()) < p["control_response_z"]:
+                unresponsive.append(
+                    f"{cvar} {a.direction} from {a.start_h:g} h while {evar} did not push back "
+                    f"(median {float(push.median()):+.1f} z in the correcting direction)"
+                )
+        # E17: the output deviates persistently while the controlled variable stays in range.
+        for a in alerts:
+            if a.variable != evar or a.persistence != "persistent":
+                continue
+            win = level[level["elapsed_h"].between(a.start_h - 1, a.end_h + 1)]
+            if len(win) and float((win["z"].abs() < dz).mean()) >= p["decoupled_min_fraction"]:
+                working.append(
+                    f"{evar} {a.direction} {a.start_h:g}-{a.end_h:g} h while {cvar} stayed in range"
+                )
+        notes.append(f"{controlled} loop: {cvar} controlled by {evar}")
+    e17 = (
+        ("present", "; ".join(working) + ".")
+        if working
+        else ("absent", f"No unusual controller effort ({'; '.join(notes)}).")
+    )
+    e18 = (
+        ("present", "; ".join(unresponsive) + ".")
+        if unresponsive
+        else ("absent", f"Controllers responded normally to any drift ({'; '.join(notes)}).")
+    )
+    return e17, e18
+
+
 def _investigation_evidence(investigations: pd.DataFrame, batch_id: str, kb: Knowledge) -> dict:
     """Evidence from scientist-recorded check results, mapped through the catalogue.
 
@@ -432,8 +522,9 @@ def compute_evidence(
     r = kb.roles
     dz = p["deviation_z"]
     s = scores[scores["batch_id"] == batch_id]
-    persistent = {a.variable for a in alerts if a.persistence == "persistent"}
-    alerted = {a.variable for a in alerts}
+    control = kb.control_variables
+    persistent = {a.variable for a in alerts if a.persistence == "persistent"} - control
+    alerted = {a.variable for a in alerts} - control
     has = {r[role]: bool(len(_var(s, r[role]))) for role in ROLES}
     out: dict[str, tuple[str, str]] = {}
 
@@ -545,6 +636,9 @@ def compute_evidence(
     persistent_dir(r["temperature"], "high", "E14", "Temperature above reference")
     if out["E14"][0] == "absent" and has[r["temperature"]]:
         persistent_dir(r["temperature"], "low", "E14", "Temperature below reference")
+
+    if "E17" in kb.evidence:
+        out["E17"], out["E18"] = _control_loop_evidence(s, alerts, p, kb)
 
     return {
         eid: EvidenceItem(

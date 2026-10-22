@@ -26,7 +26,11 @@ streamlit run app/dashboard.py      # opens http://localhost:8501
 
 - **Campaign overview**: every monitored batch with its status, process deviation, leading explanation, contamination evidence and affected scope.
 - **Batch investigation**: signal timelines against the reference band with alerts; a **replay** slider that shows what the system knew at any hour; ranked explanations, evidence, next checks and possible sources; a form to **record check results** (the assessment updates immediately); a downloadable report.
+- **Batch investigation** also shows **how the assessment developed** (the batch replayed hour by hour: when the first alert came and when each explanation first led) and takes **alert feedback** (real issue / false alarm / not sure), downloadable for re-tuning.
+- **Detection timing**: for batches with a known onset, hours from onset to the first alert and the lead over today's method, beside the false-alarm rate.
 - **Source tracing**: a genealogy graph of contamination cases and the resources linking them, clusters, and the full candidate table.
+- **Value estimate**: a yearly estimate from the plant's own figures (batches, loss rate, batch cost, test cost); the system only contributes the measured lead time and false-alarm rate. Pre-filled values are placeholders.
+- **Load your data**: upload plant exports plus a `mapping.yaml`, convert, see the readiness report, and monitor them. The [data template](docs/data-template/) shows the format.
 - **How it works**: a plain-language explanation and the system's limits.
 
 A "Show simulated ground truth" toggle (synthetic data only) shows the known answers for evaluation. The model never sees them.
@@ -34,6 +38,15 @@ A "Show simulated ground truth" toggle (synthetic data only) shows the known ans
 ### Deploying (Streamlit Community Cloud)
 
 On [share.streamlit.io](https://share.streamlit.io), create an app from this repo: branch `main`, main file `app/dashboard.py`, Python 3.13 (under Advanced settings). Dependencies come from `requirements.txt`, and the simulated campaign in `data/synthetic/` is committed, so nothing else is needed. Set sharing to invite-only to keep it to the team.
+
+## Loading MaverickX data
+
+```bash
+python -m contamination.importer convert path/to/mapping.yaml --out data/maverickx/campaign
+python -m contamination.importer readiness data/maverickx/campaign
+```
+
+`docs/data-template/` has example exports in common plant layouts and an annotated `mapping.yaml`. The readiness report says which process roles are measured, how many approved normal batches and confirmed contamination cases there are, whether result times and genealogy are recorded, and what is missing.
 
 ## Running the demo
 
@@ -53,16 +66,18 @@ The demo generates synthetic batches, validates them, fits a frozen reference on
 | `ingest.py` | 1 · evidence acquisition | Loads CSVs; flags (never deletes) missing, suspect, duplicate and wrong-unit readings |
 | `reference.py` | 3 · reference memory | Robust per-hour reference (median, 1.4826·MAD), frozen and versioned |
 | `detectors.py` | 4 · anomaly detection | Robust z threshold, EWMA, two-sided CUSUM |
-| `monitor.py` | 4 · anomaly detection | Leave-one-out limit calibration; scoring; structured alerts; batch summary; `as_of_h` replay |
+| `monitor.py` | 4 · anomaly detection | Leave-one-out limit calibration under a batch-level false-alarm budget; scoring; structured alerts; batch summary; `as_of_h` replay |
 | `alerts.py` | 4 · output | `Alert` object: evidence, persistence, corroboration, data-quality warnings, versions |
-| `diagnosis.py` | 5 · diagnostic reasoning, 3 · confidence/severity, 4 · next checks | Evidence items (present/absent/unknown), transparent hypothesis ranking, safety rule, investigation reports |
+| `diagnosis.py` | 5 · diagnostic reasoning, 3 · confidence/severity, 4 · next checks | Evidence items (present/absent/unknown), including controller-output evidence; transparent hypothesis ranking, safety rule, investigation reports |
 | `knowledge/catalogue.yaml` | 5 · knowledge base | Hypotheses, evidence matrix, weights, checks: a **draft** for scientist review |
 | `tracing.py` | 2 · source tracing | Batch genealogy graph (NetworkX); candidate sources ranked by over-representation (Fisher's exact test, Bonferroni, confounding check); clusters; affected scope |
 | `datasets/indpensim.py`, `datasets/erythromycin.py` | external data | Download and convert external datasets into campaign folders; evaluate on them |
+| `importer.py` | 1 · evidence acquisition | Convert a plant's own exports (any layout, described by `mapping.yaml`) into a campaign; readiness report |
+| `value.py` | decision support | Yearly value estimate from the plant's own figures |
 | `knowledge/profiles/*.yaml` | 5 · knowledge base | Process profiles mapping the rule book's roles (biomass, oxygen, pH, product, temperature) to each process's variables |
 | `robustness.py` | validation | Multi-seed evaluation of detection and diagnosis |
 | `evaluate.py` | validation | Sensitivity, specificity, precision, false alerts per batch, lead time vs today's method |
-| `pipeline.py` | orchestration | Load a campaign folder; run detection → diagnosis → tracing; per-batch replay |
+| `pipeline.py` | orchestration | Load a campaign folder; run detection → diagnosis → tracing; per-batch replay and diagnosis timeline |
 | `app/dashboard.py` | 6 · decision support | Streamlit investigation dashboard |
 | `plots.py` | reporting | Reference band vs observed trajectory with alerts |
 

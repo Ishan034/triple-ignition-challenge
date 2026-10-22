@@ -13,10 +13,14 @@ diagnosis avoids calling an equipment fault "contamination".
 
 Conversion choices (documented, not hidden):
 
-* Only process OUTPUTS are monitored (pH, temperature, DO, OUR, CER, off-gas CO2,
-  substrate, offline biomass and penicillin). The faulted manipulated inputs
-  (aeration rate, feed rates, coolant flow) are excluded: watching the input that
-  was changed would make detection trivial.
+* Process outputs are monitored (pH, temperature, DO, OUR, CER, off-gas CO2,
+  substrate, offline biomass and penicillin), plus the outputs of the pH and
+  temperature controllers (base flow, cooling-water flow), which a plant historian
+  records. The recipe-driven inputs that the aeration and substrate-feed faults act
+  on (aeration rate, sugar feed rate) are excluded: watching the input that was
+  changed would make those detections trivial. The base-flow and coolant faults act
+  on the controller outputs themselves, so their detection is partly by construction;
+  what matters for them is the diagnosis (equipment fault, not contamination).
 * Online signals (logged every 0.2 h) are kept at whole hours, as a plant historian
   would. Offline assays (every 12 h) are given a 4 h result delay, IndPenSim's
   default offline-assay delay, so they only count once available.
@@ -55,6 +59,9 @@ ONLINE = {
     "Carbon evolution rate(CER:g/h)": "cer",
     "carbon dioxide percent in off-gas(CO2outgas:%)": "co2_offgas",
     "Substrate concentration(S:g/L)": "substrate",
+    # Controller outputs of the pH and temperature loops.
+    "Base flow rate(Fb:L/h)": "base_flow",
+    "Heating/cooling water flow rate(Fc:L/h)": "coolant_flow",
 }
 OFFLINE = {
     "Offline Biomass concentratio(X_offline:X(g L^{-1}))": "biomass_offline",
@@ -102,7 +109,10 @@ def extract_process(zip_path: Path, raw_dir: Path = RAW_DIR) -> Path:
         return out_path
     z = zipfile.ZipFile(zip_path)
     with z.open("Mendeley_data/100_Batches_IndPenSim_V3.csv") as f, open(out_path, "w") as out:
-        out.writelines(",".join(raw.rstrip("\n").split(",", N_PROCESS_COLUMNS)[:N_PROCESS_COLUMNS]) + "\n" for raw in io.TextIOWrapper(f, encoding="utf-8", errors="replace"))
+        out.writelines(
+            ",".join(raw.rstrip("\n").split(",", N_PROCESS_COLUMNS)[:N_PROCESS_COLUMNS]) + "\n"
+            for raw in io.TextIOWrapper(f, encoding="utf-8", errors="replace")
+        )
     with z.open("Mendeley_data/100_Batches_IndPenSim_Statistics.csv") as f:
         (raw_dir / "indpensim_statistics.csv").write_bytes(f.read())
     return out_path
