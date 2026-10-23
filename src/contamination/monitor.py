@@ -25,6 +25,11 @@ from .reference import ReferenceProfile, build_reference
 from .schema import VARIABLES
 
 NO_EVIDENCE = "none recorded (no independent test results supplied)"
+# Detectors whose limits the false-alarm budget tightens. Single readings (robust
+# threshold) and changes within a batch (shift) have heavy-tailed peaks across normal
+# batches, so their worst batch overstates the limit; EWMA and CUSUM on the raw z
+# accumulate each batch's persistent offset, so tightening them mostly adds false alarms.
+BUDGETED = ("robust_threshold", "shift")
 
 
 @dataclass(frozen=True)
@@ -53,6 +58,10 @@ class MonitorConfig:
     # Control-loop check: a controller counts as pushing back when its output's robust z
     # in the correcting direction is at least this.
     loop_response_z: float = 1.0
+    # "shift" (change from the batch's own recent past) is available but off by default:
+    # it doubled the catch rate for simulated contamination on IndPenSim batches, but on
+    # the real erythromycin plant it raised flagged batches from 9% to 39%
+    # (docs/external-validation.md). Add it per process once its false alarms are known.
     detectors: tuple[str, ...] = ("robust_threshold", "ewma", "cusum", "loop_check")
 
 
@@ -90,7 +99,12 @@ def score(
     stat_cols = {d: np.full(len(data), np.nan) for d in DETECTORS}
     positions = np.arange(len(data))
     for idx in data.groupby(["batch_id", "variable"], sort=False).indices.values():
-        stats = statistics(data["z"].to_numpy()[idx], config.ewma_lambda, config.cusum_k)
+        stats = statistics(
+            data["z"].to_numpy()[idx],
+            config.ewma_lambda,
+            config.cusum_k,
+            data["elapsed_h"].to_numpy()[idx],
+        )
         for d, values in stats.items():
             stat_cols[d][positions[idx]] = values
     for d, values in stat_cols.items():
@@ -196,9 +210,7 @@ def fit_reference(
         config.ewma_lambda, config.ewma_L, config.robust_limit, config.cusum_h
     )
     quantiles = {
-        d: config.threshold_calibration_quantile
-        if d == "robust_threshold"
-        else config.calibration_quantile
+        d: config.threshold_calibration_quantile if d in BUDGETED else config.calibration_quantile
         for d in DETECTORS
     }
     if not all(0.5 <= q <= 1.0 for q in quantiles.values()):
@@ -207,13 +219,13 @@ def fit_reference(
     peaks = loo_peak_statistics(measurements, approved, config, control_loops)
     margin = config.calibration_margin
     if config.false_alarm_budget is not None:
-        # Tighten the robust-threshold limit step by step while the share of approved
+        # Tighten the budgeted limits step by step while the share of approved
         # batches that would have alerted (on any variable, any detector) stays within
         # the budget. The budget is a batch-level false-alarm rate, so it does not grow
         # with the number of monitored variables.
         allowed = config.false_alarm_budget * len(approved)
-        for q in np.round(np.arange(quantiles["robust_threshold"], 0.795, -0.005), 3):
-            trial = {**quantiles, "robust_threshold": float(q)}
+        for q in np.round(np.arange(config.threshold_calibration_quantile, 0.795, -0.005), 3):
+            trial = {**quantiles, **{d: float(q) for d in BUDGETED}}
             alerting = _alerting_batches(
                 peaks, _limits(peaks, trial, defaults, margin), config.detectors
             )
@@ -227,7 +239,7 @@ def fit_reference(
             "leave-one-out over approved batches; limit = max(default, margin * "
             "quantile of per-batch peak |statistic|)"
             + (
-                f"; robust-threshold quantile chosen so at most {config.false_alarm_budget:.0%} "
+                f"; robust-threshold and shift quantile chosen so at most {config.false_alarm_budget:.0%} "
                 "of approved batches would alert"
                 if config.false_alarm_budget is not None
                 else ""

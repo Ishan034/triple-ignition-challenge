@@ -67,7 +67,7 @@ The demo generates synthetic batches, validates them, fits a frozen reference on
 | `synthetic.py` | data | Synthetic batches: normal, slow growth, contamination, pH sensor spike, DO probe drift, missing-data gaps |
 | `ingest.py` | 1 · evidence acquisition | Loads CSVs; flags (never deletes) missing, suspect, duplicate and wrong-unit readings |
 | `reference.py` | 3 · reference memory | Robust per-hour reference (median, 1.4826·MAD), frozen and versioned |
-| `detectors.py` | 4 · anomaly detection | Robust z threshold, EWMA, two-sided CUSUM |
+| `detectors.py` | 4 · anomaly detection | Robust z threshold, EWMA, two-sided CUSUM, control-loop check (a controlled variable drifting while its controller does not respond); optional shift-from-own-past detector |
 | `monitor.py` | 4 · anomaly detection | Leave-one-out limit calibration under a batch-level false-alarm budget; scoring; structured alerts; batch summary; `as_of_h` replay |
 | `alerts.py` | 4 · output | `Alert` object: evidence, persistence, corroboration, data-quality warnings, versions |
 | `diagnosis.py` | 5 · diagnostic reasoning, 3 · confidence/severity, 4 · next checks | Evidence items (present/absent/unknown), including controller-output evidence; transparent hypothesis ranking, safety rule, investigation reports |
@@ -78,6 +78,10 @@ The demo generates synthetic batches, validates them, fits a frozen reference on
 | `value.py` | decision support | Yearly value estimate from the plant's own figures |
 | `knowledge/profiles/*.yaml` | 5 · knowledge base | Process profiles mapping the rule book's roles (biomass, oxygen, pH, product, temperature) to each process's variables |
 | `robustness.py` | validation | Multi-seed evaluation of detection and diagnosis |
+| `multivariate.py` | validation | PCA (Hotelling T² / SPE) benchmark under the same false-alarm budget: comparison only |
+| `datasets/contaminate.py` | validation | Semi-synthetic test: simulated contaminant effects added to held-out IndPenSim batches |
+| `uncertainty.py` | validation | 95% ranges for reported counts (Wilson) and medians (bootstrap) |
+| `refresh.py` | 3 · reference memory | Reference refresh: propose newly approved batches, show how "normal" would move, keep a version history |
 | `evaluate.py` | validation | Sensitivity, specificity, precision, false alerts per batch, lead time vs today's method |
 | `pipeline.py` | orchestration | Load a campaign folder; run detection → diagnosis → tracing; per-batch replay and diagnosis timeline |
 | `app/dashboard.py` | 6 · decision support | Streamlit investigation dashboard |

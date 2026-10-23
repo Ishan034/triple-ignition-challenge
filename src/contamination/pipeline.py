@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from .detectors import ALGORITHM_VERSION
 from .diagnosis import DiagnosisResult, Knowledge, diagnose, load_knowledge
 from .importer import load_variables
 from .ingest import (
@@ -112,7 +113,12 @@ def _fingerprint(campaign: Campaign, config: MonitorConfig) -> str:
     h = hashlib.sha256(measurements_path(campaign.data_dir).read_bytes())
     h.update(
         repr(
-            (sorted(campaign.reference_ids), asdict(config), campaign.kb.measured_control_loops)
+            (
+                ALGORITHM_VERSION,
+                sorted(campaign.reference_ids),
+                asdict(config),
+                campaign.kb.measured_control_loops,
+            )
         ).encode()
     )
     return h.hexdigest()[:16]

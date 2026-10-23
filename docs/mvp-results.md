@@ -38,6 +38,11 @@ These use the current limit calibration (a 5% false-alarm budget, see below). Wi
 earlier calibration (the single worst reference batch) the figures were 81 / 260, ~7.8 h,
 7.5 h and 1.9: on this simulated process the change makes almost no difference.
 
+These synthetic figures overstate what to expect on a real plant: on IndPenSim's
+realistic batch-to-batch variation, a contaminant is caught reliably only once it changes
+respiration by about 40% (see `docs/external-validation.md`, section 5). A PCA benchmark
+on the same hourly signals matched our detectors here (120/120 at ~7.7 h).
+
 The simple robust threshold gives the earliest alerts. EWMA and CUSUM add little on these
 simulated signals. CUSUM's calibrated limits are very high because each batch has a small
 constant offset that CUSUM keeps accumulating.

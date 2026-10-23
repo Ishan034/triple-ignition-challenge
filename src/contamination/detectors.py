@@ -10,6 +10,12 @@ statistic. An alert is raised where ``|statistic| > limit``.
   smaller sustained shifts. Default limit ``L * sqrt(lambda / (2 - lambda))``.
 * ``cusum``: two-sided tabular CUSUM, ``S+_t = max(0, S+_{t-1} + z_t - k)`` and
   ``S-_t = max(0, S-_{t-1} - z_t - k)``. Accumulates evidence of a persistent shift.
+* ``shift``: a CUSUM of each reading's change from the batch's *own* recent past,
+  ``d_t = z_t - median(z over the 24 h ending 12 h before t)``. Every batch sits a
+  little above or below the reference for its whole run (inoculum, recipe, control
+  strategy); that offset cancels in ``d``, so a change that starts partway through a
+  batch, such as a contaminant taking hold, stands out. The 12 h lag keeps a slowly
+  growing change out of its own baseline.
 * ``loop_check``: for a controlled variable (pH, temperature) whose controller output
   is recorded, the robust z of the variable at readings where the controller is *not*
   pushing back (its output's z in the correcting direction is below a small margin),
@@ -27,7 +33,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-ALGORITHM_VERSION = "0.2.0"
+ALGORITHM_VERSION = "0.3.0"
 
 
 @dataclass(frozen=True)
@@ -42,6 +48,7 @@ DETECTORS: dict[str, DetectorSpec] = {
     ),
     "ewma": DetectorSpec("ewma", "Sustained shift in the smoothed (EWMA) deviation"),
     "cusum": DetectorSpec("cusum", "Accumulated persistent deviation (two-sided CUSUM)"),
+    "shift": DetectorSpec("shift", "Change from the batch's own recent past (CUSUM)"),
     "loop_check": DetectorSpec(
         "loop_check", "Controlled variable off its reference while its controller does not respond"
     ),
@@ -92,12 +99,31 @@ def loop_check(z_controlled: np.ndarray, push: np.ndarray, response_z: float) ->
     return out
 
 
-def statistics(z: np.ndarray, ewma_lambda: float, cusum_k: float) -> dict[str, np.ndarray]:
-    return {
+def own_baseline_change(
+    z: np.ndarray, t: np.ndarray, lag_h: float = 12.0, window_h: float = 24.0, min_points: int = 3
+) -> np.ndarray:
+    """z minus the median z of the same batch over (t - lag - window, t - lag]."""
+    z, t = np.asarray(z, float), np.asarray(t, float)
+    out = np.full(len(z), np.nan)
+    ok = np.isfinite(z)
+    for i in np.flatnonzero(ok):
+        sel = ok & (t <= t[i] - lag_h) & (t > t[i] - lag_h - window_h)
+        if sel.sum() >= min_points:
+            out[i] = z[i] - np.median(z[sel])
+    return out
+
+
+def statistics(
+    z: np.ndarray, ewma_lambda: float, cusum_k: float, t: np.ndarray | None = None
+) -> dict[str, np.ndarray]:
+    out = {
         "robust_threshold": np.asarray(z, float),
         "ewma": ewma(z, ewma_lambda),
         "cusum": cusum(z, cusum_k),
     }
+    if t is not None:
+        out["shift"] = cusum(own_baseline_change(z, t), cusum_k)
+    return out
 
 
 def default_limits(ewma_lambda: float, ewma_L: float, robust_limit: float, cusum_h: float) -> dict:
@@ -105,5 +131,6 @@ def default_limits(ewma_lambda: float, ewma_L: float, robust_limit: float, cusum
         "robust_threshold": robust_limit,
         "ewma": ewma_limit(ewma_L, ewma_lambda),
         "cusum": cusum_h,
+        "shift": cusum_h,
         "loop_check": robust_limit,
     }

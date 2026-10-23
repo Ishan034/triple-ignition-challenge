@@ -35,38 +35,42 @@ controller outputs themselves; for those, what is tested is mainly the diagnosis
 **Split.** The reference was built from 20 normal batches of each control strategy (60).
 We tested on the other 30 normal batches and all 10 fault batches.
 
-| Measure | Before (Oct 2026 first run) | Now |
-|---|---|---|
-| Normal held-out batches flagged | 1 / 30 | **1 / 30** (one isolated temperature reading) |
-| Fault batches flagged after the fault started | 8 / 10 | **8 / 10** |
-| Median time from fault onset to first alert | 5 h | **2 h** |
-| Alerts before a fault started | 0 | 0 |
-| Batches wrongly diagnosed as contamination | 0 / 40 | **0 / 40** |
-| Faults read as an equipment or actuator fault | (no such explanation) | **2 / 10** (both cooling faults) |
+| Measure | First run | With controller outputs | With the control-loop check (now) |
+|---|---|---|---|
+| Normal held-out batches flagged | 1 / 30 | 1 / 30 | **1 / 30 (95% range 1–17%)** |
+| Fault batches flagged after the fault started | 8 / 10 | 8 / 10 | **10 / 10 (72–100%)** |
+| Median time from fault onset to first alert | 5 h | 2 h | **1.5 h (0–5.5 h)** |
+| Alerts before a fault started | 0 | 0 | 0 |
+| Batches wrongly diagnosed as contamination | 0 / 40 | 0 / 40 | **0 / 40 (0–9%)** |
+| Faults read as an equipment or actuator fault | (no such explanation) | 2 / 10 | **4 / 10** (all pump and cooling faults) |
 
 | Fault (batches) | Caught | Hours to alert | Leading explanation |
 |---|---|---|---|
 | Aeration rate (3) | 3 / 3 | 0 | Process-condition change (1), unresolved (2) |
 | Substrate feed rate (3) | 3 / 3 | 2 (was 5–6) | Unresolved (2), delayed/slow growth (1) |
-| Coolant flow rate (2) | 2 / 2 | 10–11 | **Equipment or actuator fault (2)** |
-| Base flow rate (2) | **0 / 2** | – | – |
+| Coolant flow rate (2) | 2 / 2 | 9–10 | **Equipment or actuator fault (2)** |
+| Base flow rate (2) | **2 / 2** (were missed) | **1** | **Equipment or actuator fault (2)** |
 
 **Reading it.**
 
 - **Watching the controllers helps.** The base pump's output changed 2 h after the
   substrate-feed faults began, 3–4 h before the culture signals did, so these faults are
-  now caught at 2 h instead of 5–6 h. For the cooling faults, temperature rose while the
-  cooling-water flow did not respond: the rule book now reads that pattern as an
-  **equipment or actuator fault**, the correct explanation, instead of a
-  process-condition change.
+  caught at 2 h instead of 5–6 h.
+- **The control-loop check catches the base-pump faults 1 h after they start.** A
+  healthy pH loop answers a falling pH by pumping more base. In all 90 normal batches, pH
+  never moved far from normal while the base pump failed to respond (robust z at most
+  9.3); in both base-flow faults it reached 10.6 one hour after onset and 28 by hour 4.
+  The new detector watches exactly that pattern, so it needs no tighter limits and adds
+  no false-alarm batches. The same pattern on temperature and cooling water flags the
+  cooling faults. All four pump and cooling faults are now read as **equipment or
+  actuator faults**.
 - **Still no equipment fault mistaken for contamination.** One substrate-feed fault leads
   with "delayed / slow growth", which is the culture's response to less feed: right
   about the culture, but it does not name the pump.
-- **Both base-flow faults are still missed, and the earlier explanation was wrong.** We
-  said the pH loop compensates so the culture barely changes. In fact pH drops from 6.5
-  to below 6.0 during the fault, but the pH limit was very wide (robust z ≈ 56) because
-  a few normal reference batches have similar dips. Tightening the limit catches them
-  (see the calibration trade-off below), at the cost of more false alarms.
+- **A correction.** We first said the base-flow faults were missed because the pH loop
+  compensates. In fact pH drops from 6.5 to below 6.0, but the pH limit was very wide
+  (robust z ≈ 56) because a few normal batches have similar dips, *with* the controller
+  responding. The control-loop check uses that difference.
 
 **Two flaws this dataset exposed earlier, now fixed:**
 
@@ -81,8 +85,9 @@ We tested on the other 30 normal batches and all 10 fault batches.
    one-hour offset that made three fault alerts look as if they came before the fault.
    Elapsed time now counts from each batch's recorded start time.
 
-These fixes, the controller-output rules and the calibration below were all developed
-while looking at this dataset, so the IndPenSim numbers are **no longer unseen**.
+These fixes, the controller-output rules, the control-loop check and the calibration
+below were all developed while looking at this dataset, so the IndPenSim numbers are
+**no longer unseen**.
 
 ## 2. Erythromycin fermentation: 406 real industrial batches
 
@@ -136,7 +141,7 @@ except in the first row.
 | **False-alarm budget 5% (new default)** | **1 / 30** | **8 / 10** | 0 / 2 | **14 / 163** | 43 / 130 |
 | False-alarm budget 10% | 3 / 30 | 10 / 10 | 2 / 2 (only at 76 h) | 54 / 163 (33%) | 44 / 130 |
 
-IndPenSim figures in the first two rows come from runs before the controller outputs were added; the others include them.
+IndPenSim figures in the first two rows come from runs before the controller outputs were added; the others include them. All rows are before the control-loop check, which now catches the base-flow faults under the 5% budget (section 1).
 
 **Reading it.**
 
@@ -153,15 +158,108 @@ IndPenSim figures in the first two rows come from runs before the controller out
   and it is a number MaverickX can set themselves ("how many normal batches in 100 can we
   afford to review?"). Catching the base-flow faults needs about 10%.
 
+## 4. Benchmark: would a standard multivariate method do better?
+
+Reviewers will ask. `python -m contamination.multivariate` fits PCA with Hotelling's T²
+and SPE (the textbook multivariate monitoring method) on the same hourly z-scores,
+calibrated by cross-validation under the same 5% false-alarm budget. Offline assays are
+left out (PCA needs a complete row every hour), and our detectors are scored on the same
+hourly signals. **Comparison only**: the project keeps the simple detectors.
+
+| Dataset | Method | Normal batches flagged | Problem batches caught | Onset to alert |
+|---|---|---|---|---|
+| IndPenSim | Ours (same signals) | 1/30 (1–17%) | **10/10 (72–100%)** | 1.5 h (0–5.5 h) |
+| IndPenSim | PCA T²/SPE | 0/30 (0–11%) | 7/10 (40–89%) | 2 h (1–2 h) |
+| Synthetic, seeds 11–30 | Ours (pH, temperature, DO) | 75/260 (24–35%) | 120/120 contaminations | 7.7 h |
+| Synthetic, seeds 11–30 | PCA T²/SPE | 69/260 (22–32%) | 120/120 contaminations | 7.7 h |
+
+PCA missed both base-pump faults and one cooling fault, and on the synthetic data it
+matched our detectors. It does not say which variable moved or why without a further
+contribution analysis. So there is no case for the more complex method on this evidence.
+
+## 5. Semi-synthetic contamination test: how big must a contaminant be?
+
+Neither external dataset contains contamination, and on our own simulator a perfect score
+partly reflects shared assumptions. `python -m contamination.datasets.contaminate` takes
+the 30 held-out normal IndPenSim batches and adds the effects of a contaminant growing
+from a random onset hour (logistic growth, half effect 12 h after onset): extra oxygen
+uptake and CO₂, lower dissolved oxygen, extra biomass, extra acid (the base pump works
+harder), extra heat (more cooling) and less penicillin. **The effects are our
+assumptions**; the batch-to-batch variation, control strategies, sampling and 12-hourly
+lab results with a 4 h delay are IndPenSim's. The reference is fitted on untouched
+batches only. At strength 1 the contaminant raises CO₂ output and oxygen uptake by 20%
+and lowers dissolved oxygen by 25%; other strengths scale these.
+
+| Contaminant strength | Contaminated batches caught | Onset to first alert | Named as contamination (leading explanation) | Onset to named |
+|---|---|---|---|---|
+| ½ (+10% respiration) | 1/30 (1–17%) | – | 0/30 | – |
+| 1 (+20%) | 5/30 (7–34%) | 49 h | 2/30 | 33 h |
+| 2 (+40%) | **28/30 (79–98%)** | **16 h** | **28/30** | **26 h** |
+| 4 (+80%) | **30/30 (89–100%)** | **11 h** | **30/30** | **20 h** |
+
+The unmodified copies of the same batches: 1/30 flagged, 0/30 named contamination.
+
+**Reading it.**
+
+- **There is a detection threshold.** On realistic industrial variation, a contaminant
+  that changes respiration by 20% or less is mostly invisible; at 40% or more it is
+  caught within about 16 h and correctly named as contamination within about a day.
+  The 120/120 on our own simulator reflected a process with much less batch-to-batch
+  variation, not a general capability.
+- **When it is caught, the diagnosis is right.** At strengths 2 and 4, contamination
+  became the leading explanation in 58 of 60 batches, using rules written for a
+  different process (α-amylase), and no normal batch was called contamination.
+- **The first sign is almost always CO₂ output (CER):** 58 of the 64 detected batches.
+  Off-gas analysis is the most valuable signal to ask MaverickX for.
+- **What would lower the threshold:** less batch-to-batch variation in MaverickX's own
+  process than in IndPenSim's three control strategies, more frequent biomass/OD
+  readings than every 12 h, a reference per product/recipe, and the optional shift
+  detector (section 6) once its false alarms are acceptable. Only MaverickX's data can
+  say where their threshold lies.
+
+
+## 6. Optional: comparing each batch with its own past
+
+A natural fix for batch-to-batch offsets is to compare each reading with the same batch's
+recent past, so a persistent offset cancels and a change partway through stands out.
+This "shift" detector is implemented but **off by default**:
+
+| Dataset | Without shift | With shift |
+|---|---|---|
+| Semi-synthetic contamination, strength 1 (first run) | 6/30 caught, 105 h after onset | 12/30 caught, 34 h after onset |
+| IndPenSim faults and normal batches | 10/10, 1/30 | 10/10, 1/30 |
+| Erythromycin plant: later batches flagged | **14/163 (9%)** | **63/163 (39%)** |
+| Synthetic tuning seeds: normal-category flagged | 43/130 | 47/130 |
+
+Real plant batches change mid-run for ordinary reasons, so on the erythromycin plant it
+would bury scientists in reviews. It can be switched on per process
+(`MonitorConfig.detectors`) once MaverickX's own false-alarm rate with it is known.
+
+## 7. Reference refresh
+
+`python -m contamination.refresh data/erythromycin` proposes monitored batches that could
+join the approved reference (no alerts, no problem outcome), shows how "normal" and the
+limits would move, and with `--apply --note "..."` writes the new list and a line in
+`reference_history.csv`. Nothing is approved automatically. On the erythromycin plant,
+149 of the 163 later batches qualify (the other 14 had alerts to review first); the
+reference trajectories would barely move (median shift 0–0.2 robust SD), while the
+single-reading limits would tighten (e.g. pH 9.1 → 7.0) because more batches define
+normal. The potency drift noted above is not visible in the monitored signals.
+
 ## What this changes for the project
 
-- We can now say: **on 40 industrial-scale simulated batches, 1 false alarm, 8 of 10
-  equipment faults caught (median 2 h), none mistaken for contamination, and both
-  cooling faults correctly read as equipment faults.** On real plant data, **flagged
-  batches had significantly lower final potency.**
+- We can now say: **on 40 industrial-scale simulated batches, 1 false alarm, all 10
+  equipment faults caught (median 1.5 h), none mistaken for contamination, and all four
+  pump and cooling faults correctly read as equipment faults.** On real plant data,
+  **flagged batches had significantly lower final potency.** A standard multivariate
+  method (PCA) did no better.
 - We still cannot say anything about **contamination** detection on real data. That
-  needs MaverickX's batch records with confirmed contamination cases.
+  needs MaverickX's batch records with confirmed contamination cases. On realistic
+  simulated variation, a contaminant is caught reliably once it changes respiration by
+  about 40% or more, and missed at 20% or less (section 5).
 - Done since the first run: limits set by a false-alarm budget; controller outputs
-  monitored; an "equipment or actuator fault" explanation in the rule book.
+  monitored; a control-loop check; an "equipment or actuator fault" explanation in the
+  rule book; a PCA benchmark; the semi-synthetic contamination test; 95% ranges on every
+  count; a reference refresh workflow.
 - The data request now asks MaverickX for controller outputs (pump and valve demands) and
   for their acceptable false-alarm rate.

@@ -1,6 +1,6 @@
 {
-  "version": "589e8c450a2b",
-  "created_at": "2026-10-23T18:44:15+00:00",
+  "version": "82e84083dad6",
+  "created_at": "2026-10-23T19:09:47+00:00",
   "batch_ids": [
     "E001",
     "E002",
@@ -310,6 +310,26 @@
       "our_efp": 1095.5712,
       "cer_efp": 1200.1173
     },
+    "shift": {
+      "ph": 83.5127,
+      "temperature": 611.7315,
+      "dissolved_oxygen": 64.9047,
+      "biomass_od600": 5.0,
+      "enzyme_activity": 5.0,
+      "do2_mg_l": 5.0,
+      "our": 5.0,
+      "cer": 5.0,
+      "co2_offgas": 5.0,
+      "substrate": 5.0,
+      "biomass_offline": 5.0,
+      "penicillin_offline": 5.0,
+      "base_flow": 5.0,
+      "coolant_flow": 5.0,
+      "ph_offline": 94.0696,
+      "agitation": 1356.0099,
+      "our_efp": 578.8578,
+      "cer_efp": 669.13
+    },
     "loop_check": {
       "ph": 4.0,
       "temperature": 4.0,
@@ -332,17 +352,19 @@
     }
   },
   "calibration": {
-    "method": "leave-one-out over approved batches; limit = max(default, margin * quantile of per-batch peak |statistic|); robust-threshold quantile chosen so at most 5% of approved batches would alert",
+    "method": "leave-one-out over approved batches; limit = max(default, margin * quantile of per-batch peak |statistic|); robust-threshold and shift quantile chosen so at most 5% of approved batches would alert",
     "quantiles": {
       "robust_threshold": 0.99,
       "ewma": 1.0,
       "cusum": 1.0,
+      "shift": 0.99,
       "loop_check": 1.0
     },
     "default_limits": {
       "robust_threshold": 4.0,
       "ewma": 1.0,
       "cusum": 5.0,
+      "shift": 5.0,
       "loop_check": 4.0
     },
     "loo_max_statistic": {
@@ -406,6 +428,26 @@
         "our_efp": 995.9738,
         "cer_efp": 1091.0157
       },
+      "shift": {
+        "ph": 111.245,
+        "temperature": 906.5757,
+        "dissolved_oxygen": 183.0824,
+        "biomass_od600": 0.0,
+        "enzyme_activity": 0.0,
+        "do2_mg_l": 0.0,
+        "our": 0.0,
+        "cer": 0.0,
+        "co2_offgas": 0.0,
+        "substrate": 0.0,
+        "biomass_offline": 0.0,
+        "penicillin_offline": 0.0,
+        "base_flow": 0.0,
+        "coolant_flow": 0.0,
+        "ph_offline": 94.5792,
+        "agitation": 1350.654,
+        "our_efp": 735.7995,
+        "cer_efp": 829.5335
+      },
       "loop_check": {
         "ph": 0.0,
         "temperature": 0.0,
@@ -455,7 +497,7 @@
         "loop_check"
       ]
     },
-    "fingerprint": "2f07d77915524af3"
+    "fingerprint": "3a8b9814489727be"
   },
   "stats": [
     {
