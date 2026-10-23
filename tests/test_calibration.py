@@ -60,3 +60,26 @@ def test_uncertainty_ranges():
     assert rate(8, 10) == "8/10 (49–94%)"
     m, lo, hi = median_interval([1.0, 2.0, 3.0, 4.0, 5.0])
     assert m == 3.0 and lo <= m <= hi
+
+
+def test_pca_benchmark_flags_a_broken_correlation():
+    import numpy as np
+    import pandas as pd
+
+    from contamination.multivariate import PCAModel, alert_hours, calibrate
+
+    rng = np.random.default_rng(0)
+
+    def batch(b, broken=False):
+        a = rng.normal(0, 1, (30, 1))
+        z = np.hstack([a, a + rng.normal(0, 0.1, (30, 1)), rng.normal(0, 1, (30, 1))])
+        if broken:
+            z[20:, 1] -= 4  # the two linked signals stop moving together
+        idx = pd.MultiIndex.from_product([[b], np.arange(30.0)], names=["batch_id", "hour"])
+        return pd.DataFrame(z, index=idx, columns=["x", "y", "w"])
+
+    z_ref = pd.concat([batch(f"R{i}") for i in range(20)])
+    model, limits, q = calibrate(z_ref, budget=0.05)
+    assert isinstance(model, PCAModel) and 0.8 <= q <= 1.0
+    hits = alert_hours(model, limits, batch("F", broken=True))
+    assert len(hits) and hits["hour"].min() >= 20 and hits["top_variable"].iloc[0] in ("x", "y")

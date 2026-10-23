@@ -47,4 +47,4 @@ def median_text(values, unit: str = "h") -> str:
     m, lo, hi = median_interval(values)
     if not np.isfinite(m):
         return "n/a"
-    return f"{m:g} {unit} (95% range {lo:g}–{hi:g} {unit})"
+    return f"{m:.3g} {unit} (95% range {lo:.3g}–{hi:.3g} {unit})"
