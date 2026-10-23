@@ -67,6 +67,17 @@ class Knowledge:
         return (self.roles["ph"], self.roles["oxygen"], self.roles["biomass"])
 
     @property
+    def measured_control_loops(self) -> dict[str, tuple[str, bool]]:
+        """{controlled variable: (controller output variable, output raises variable)}
+        for the loops whose controller output this process records."""
+        out = {}
+        for controlled, loop in self.control_loops.items():
+            effort = self.roles.get(loop["effort"], NOT_MEASURED)
+            if effort != NOT_MEASURED and self.roles.get(controlled, NOT_MEASURED) != NOT_MEASURED:
+                out[self.roles[controlled]] = (effort, bool(loop["output_raises_variable"]))
+        return out
+
+    @property
     def control_variables(self) -> set[str]:
         """Measured controller outputs: they show how hard a loop works, not the culture."""
         return {

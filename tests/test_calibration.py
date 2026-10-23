@@ -49,3 +49,14 @@ def test_value_estimate_is_plain_arithmetic():
     assert t["Doomed batches stopped earlier"] == pytest.approx(5 * 5 * 10)
     assert t["Cost of checking false alarms"] == pytest.approx(-95 * 0.1 * 20)
     assert t["Net value per year"] == pytest.approx(t.drop("Net value per year").sum())
+
+
+def test_uncertainty_ranges():
+    from contamination.uncertainty import median_interval, rate, wilson
+
+    lo, hi = wilson(8, 10)
+    assert 0.44 < lo < 0.5 and 0.93 < hi < 0.95
+    assert wilson(0, 40)[0] == 0.0 and wilson(10, 10)[1] == pytest.approx(1.0)
+    assert rate(8, 10) == "8/10 (49–94%)"
+    m, lo, hi = median_interval([1.0, 2.0, 3.0, 4.0, 5.0])
+    assert m == 3.0 and lo <= m <= hi

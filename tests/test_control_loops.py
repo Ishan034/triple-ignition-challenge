@@ -65,3 +65,53 @@ def test_unresponsive_controller_makes_equipment_fault_lead():
     hyps = assess(evidence, kb)
     assert hyps[0].id == "H06" and hyps[0].tier == "leading"
     assert next(h for h in hyps if h.id == "H01").score < 0
+
+
+def _loop_campaign(seed=0):
+    """Hourly pH and base flow for 12 normal batches and one with a failing base pump.
+
+    In normal batches acid bursts pull pH down and the controller answers with more base.
+    In the faulty batch the pump stops at 30 h and pH falls with no response."""
+    from contamination.schema import MEASUREMENT_COLUMNS
+
+    rng = np.random.default_rng(seed)
+    rows, t0 = [], pd.Timestamp("2026-01-01")
+    for i in range(13):
+        b, start = f"L{i:02d}", t0 + pd.Timedelta(days=3 * i)
+        burst = rng.integers(10, 40)
+        for h in range(48):
+            ph = 6.5 + rng.normal(0, 0.01)
+            base = 50 + rng.normal(0, 3)
+            if i < 12 and burst <= h < burst + 3:  # disturbance, corrected
+                ph -= 0.15
+                base += 40
+            if i == 12 and 30 <= h < 34:  # pump failure, no correction
+                ph -= 0.1 * (h - 29)
+                base = 5.0
+            ts = start + pd.Timedelta(hours=h)
+            rows += [(b, ts, ts, "ph", ph, "pH"), (b, ts, ts, "base_flow", base, "L/h")]
+    m = pd.DataFrame(
+        rows, columns=["batch_id", "timestamp", "available_at", "variable", "value", "unit"]
+    )
+    m["stage"], m["source"], m["quality_flag"], m["observation"] = None, "test", "valid", None
+    return m[MEASUREMENT_COLUMNS]
+
+
+def test_loop_check_flags_an_unanswered_drift_only():
+    from contamination.ingest import validate_measurements
+    from contamination.monitor import fit_reference, monitor
+
+    m = validate_measurements(_loop_campaign()).measurements
+    normal = [f"L{i:02d}" for i in range(12)]
+    loops = {"ph": ("base_flow", True)}
+    ref = fit_reference(m, normal, control_loops=loops)
+    assert ref.params["control_loops"] == {"ph": ["base_flow", True]}
+    result = monitor(m[m["batch_id"] == "L12"], ref)
+    loop_alerts = [a for a in result.alerts if a.detector == "loop_check"]
+    assert loop_alerts and min(a.start_h for a in loop_alerts) <= 32
+    assert all(a.variable == "ph" and a.direction == "low" for a in loop_alerts)
+    # Without the loops the same profile has no loop check at all.
+    plain = fit_reference(m, normal)
+    assert not [
+        a for a in monitor(m[m["batch_id"] == "L12"], plain).alerts if a.detector == "loop_check"
+    ]

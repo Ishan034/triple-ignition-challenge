@@ -1,6 +1,6 @@
 {
-  "version": "33cd0552c0fc",
-  "created_at": "2026-10-22T13:44:16+00:00",
+  "version": "589e8c450a2b",
+  "created_at": "2026-10-23T18:44:15+00:00",
   "batch_ids": [
     "E001",
     "E002",
@@ -309,6 +309,26 @@
       "agitation": 8634.7555,
       "our_efp": 1095.5712,
       "cer_efp": 1200.1173
+    },
+    "loop_check": {
+      "ph": 4.0,
+      "temperature": 4.0,
+      "dissolved_oxygen": 4.0,
+      "biomass_od600": 4.0,
+      "enzyme_activity": 4.0,
+      "do2_mg_l": 4.0,
+      "our": 4.0,
+      "cer": 4.0,
+      "co2_offgas": 4.0,
+      "substrate": 4.0,
+      "biomass_offline": 4.0,
+      "penicillin_offline": 4.0,
+      "base_flow": 4.0,
+      "coolant_flow": 4.0,
+      "ph_offline": 4.0,
+      "agitation": 4.0,
+      "our_efp": 4.0,
+      "cer_efp": 4.0
     }
   },
   "calibration": {
@@ -316,12 +336,14 @@
     "quantiles": {
       "robust_threshold": 0.99,
       "ewma": 1.0,
-      "cusum": 1.0
+      "cusum": 1.0,
+      "loop_check": 1.0
     },
     "default_limits": {
       "robust_threshold": 4.0,
       "ewma": 1.0,
-      "cusum": 5.0
+      "cusum": 5.0,
+      "loop_check": 4.0
     },
     "loo_max_statistic": {
       "robust_threshold": {
@@ -383,6 +405,26 @@
         "agitation": 7849.7777,
         "our_efp": 995.9738,
         "cer_efp": 1091.0157
+      },
+      "loop_check": {
+        "ph": 0.0,
+        "temperature": 0.0,
+        "dissolved_oxygen": 0.0,
+        "biomass_od600": 0.0,
+        "enzyme_activity": 0.0,
+        "do2_mg_l": 0.0,
+        "our": 0.0,
+        "cer": 0.0,
+        "co2_offgas": 0.0,
+        "substrate": 0.0,
+        "biomass_offline": 0.0,
+        "penicillin_offline": 0.0,
+        "base_flow": 0.0,
+        "coolant_flow": 0.0,
+        "ph_offline": 0.0,
+        "agitation": 0.0,
+        "our_efp": 0.0,
+        "cer_efp": 0.0
       }
     },
     "approved_batches_alerting": [
@@ -405,13 +447,15 @@
       "threshold_calibration_quantile": 1.0,
       "false_alarm_budget": 0.05,
       "corroboration_window_h": 3.0,
+      "loop_response_z": 1.0,
       "detectors": [
         "robust_threshold",
         "ewma",
-        "cusum"
+        "cusum",
+        "loop_check"
       ]
     },
-    "fingerprint": "ba592aaddaf8caf7"
+    "fingerprint": "2f07d77915524af3"
   },
   "stats": [
     {

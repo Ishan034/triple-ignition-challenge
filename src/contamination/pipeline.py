@@ -103,12 +103,18 @@ def load_campaign(
 
 
 def fit(campaign: Campaign, config: MonitorConfig = DEFAULT_CONFIG) -> ReferenceProfile:
-    return fit_reference(campaign.measurements, campaign.reference_ids, config)
+    return fit_reference(
+        campaign.measurements, campaign.reference_ids, config, campaign.kb.measured_control_loops
+    )
 
 
 def _fingerprint(campaign: Campaign, config: MonitorConfig) -> str:
     h = hashlib.sha256(measurements_path(campaign.data_dir).read_bytes())
-    h.update(repr((sorted(campaign.reference_ids), asdict(config))).encode())
+    h.update(
+        repr(
+            (sorted(campaign.reference_ids), asdict(config), campaign.kb.measured_control_loops)
+        ).encode()
+    )
     return h.hexdigest()[:16]
 
 

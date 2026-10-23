@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 
 from ..schema import MEASUREMENT_COLUMNS, VARIABLES
+from ..uncertainty import rate as count_rate
 from .common import write_campaign
 
 URL = "https://zenodo.org/records/14619074/files/EFP_long.csv?download=1"
@@ -184,7 +185,7 @@ def evaluate(campaign_dir: Path, out_dir: Path = Path("outputs/erythromycin")) -
     )
     low_cut = outcomes.loc[campaign.reference_ids, "final_potency"].quantile(0.10)
     df["low_potency"] = df["final_potency"] < low_cut
-    rate = lambda s: f"{int(s.sum())}/{len(s)} ({s.mean():.0%})" if len(s) else "0/0"
+    rate = lambda s: count_rate(int(s.sum()), len(s))  # with a 95% range
 
     out_dir.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_dir / "batch_results.csv", index=False)

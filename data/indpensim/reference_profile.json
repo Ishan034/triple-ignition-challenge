@@ -1,6 +1,6 @@
 {
-  "version": "82350db4b8ab",
-  "created_at": "2026-10-22T13:41:23+00:00",
+  "version": "6164912688e4",
+  "created_at": "2026-10-23T18:41:36+00:00",
   "batch_ids": [
     "P001",
     "P002",
@@ -64,7 +64,17 @@
     "P080"
   ],
   "params": {
-    "window_h": 1.0
+    "window_h": 1.0,
+    "control_loops": {
+      "ph": [
+        "base_flow",
+        true
+      ],
+      "temperature": [
+        "coolant_flow",
+        false
+      ]
+    }
   },
   "thresholds": {
     "robust_threshold": {
@@ -126,6 +136,26 @@
       "agitation": 5.0,
       "our_efp": 5.0,
       "cer_efp": 5.0
+    },
+    "loop_check": {
+      "ph": 10.175,
+      "temperature": 23.76,
+      "dissolved_oxygen": 4.0,
+      "biomass_od600": 4.0,
+      "enzyme_activity": 4.0,
+      "do2_mg_l": 4.0,
+      "our": 4.0,
+      "cer": 4.0,
+      "co2_offgas": 4.0,
+      "substrate": 4.0,
+      "biomass_offline": 4.0,
+      "penicillin_offline": 4.0,
+      "base_flow": 4.0,
+      "coolant_flow": 4.0,
+      "ph_offline": 4.0,
+      "agitation": 4.0,
+      "our_efp": 4.0,
+      "cer_efp": 4.0
     }
   },
   "calibration": {
@@ -133,12 +163,14 @@
     "quantiles": {
       "robust_threshold": 0.995,
       "ewma": 1.0,
-      "cusum": 1.0
+      "cusum": 1.0,
+      "loop_check": 1.0
     },
     "default_limits": {
       "robust_threshold": 4.0,
       "ewma": 1.0,
-      "cusum": 5.0
+      "cusum": 5.0,
+      "loop_check": 4.0
     },
     "loo_max_statistic": {
       "robust_threshold": {
@@ -200,6 +232,26 @@
         "agitation": 0.0,
         "our_efp": 0.0,
         "cer_efp": 0.0
+      },
+      "loop_check": {
+        "ph": 9.25,
+        "temperature": 21.6,
+        "dissolved_oxygen": 0.0,
+        "biomass_od600": 0.0,
+        "enzyme_activity": 0.0,
+        "do2_mg_l": 0.0,
+        "our": 0.0,
+        "cer": 0.0,
+        "co2_offgas": 0.0,
+        "substrate": 0.0,
+        "biomass_offline": 0.0,
+        "penicillin_offline": 0.0,
+        "base_flow": 0.0,
+        "coolant_flow": 0.0,
+        "ph_offline": 0.0,
+        "agitation": 0.0,
+        "our_efp": 0.0,
+        "cer_efp": 0.0
       }
     },
     "approved_batches_alerting": [],
@@ -216,13 +268,15 @@
       "threshold_calibration_quantile": 1.0,
       "false_alarm_budget": 0.05,
       "corroboration_window_h": 3.0,
+      "loop_response_z": 1.0,
       "detectors": [
         "robust_threshold",
         "ewma",
-        "cusum"
+        "cusum",
+        "loop_check"
       ]
     },
-    "fingerprint": "aa5e2e8a99fa34f8"
+    "fingerprint": "72f8bc611823c320"
   },
   "stats": [
     {

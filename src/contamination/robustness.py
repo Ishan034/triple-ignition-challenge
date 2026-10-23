@@ -32,6 +32,7 @@ from .ingest import validate_measurements
 from .monitor import DEFAULT_CONFIG, MonitorConfig, fit_reference
 from .synthetic import generate_dataset
 from .tracing import batch_statuses, trace_sources
+from .uncertainty import median_text, rate
 
 REVIEW_DELAYS = (("at first alert", 0.0), ("first alert + 4 h", 4.0), ("first alert + 8 h", 8.0))
 
@@ -130,6 +131,21 @@ def main() -> None:
         "median_lead_vs_reference_h",
     ]
     print(detection[cols].to_string(index=False), "\n")
+
+    def pooled(col: str) -> str:
+        k = sum(int(x.split("/")[0]) for x in detection[col])
+        n = sum(int(x.split("/")[1]) for x in detection[col])
+        return rate(k, n)
+
+    print("Pooled over seeds, with 95% ranges:")
+    print("  contaminated batches flagged:", pooled("contamination_flagged"))
+    print("  normal-category batches flagged:", pooled("normal_flagged"))
+    print("  other anomalies flagged:", pooled("non_contam_anomaly_flagged"))
+    print(
+        "  median of per-seed median lead over today's method:",
+        median_text(detection["median_lead_vs_reference_h"]),
+        "\n",
+    )
     print("Source tracing vs planted common source (process evidence only):")
     tcols = [
         "seed",

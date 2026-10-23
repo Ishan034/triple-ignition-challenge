@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 from .alerts import Alert
-from .detectors import ALGORITHM_VERSION, DETECTORS, default_limits, statistics
+from .detectors import ALGORITHM_VERSION, DETECTORS, default_limits, loop_check, statistics
 from .ingest import valid_values
 from .reference import ReferenceProfile, build_reference
 from .schema import VARIABLES
@@ -50,7 +50,10 @@ class MonitorConfig:
     # is reached. None keeps the quantiles as given.
     false_alarm_budget: float | None = 0.05
     corroboration_window_h: float = 3.0
-    detectors: tuple[str, ...] = ("robust_threshold", "ewma", "cusum")
+    # Control-loop check: a controller counts as pushing back when its output's robust z
+    # in the correcting direction is at least this.
+    loop_response_z: float = 1.0
+    detectors: tuple[str, ...] = ("robust_threshold", "ewma", "cusum", "loop_check")
 
 
 DEFAULT_CONFIG = MonitorConfig()
@@ -92,11 +95,42 @@ def score(
             stat_cols[d][positions[idx]] = values
     for d, values in stat_cols.items():
         data[f"stat_{d}"] = values
-    return data.reset_index(drop=True)
+    data = data.reset_index(drop=True)
+    _loop_statistics(data, reference.params.get("control_loops", {}), config)
+    return data
+
+
+def _loop_statistics(data: pd.DataFrame, loops: dict, config: MonitorConfig) -> None:
+    """Fill ``stat_loop_check`` on controlled-variable rows (in place)."""
+    for controlled, (effort, raises) in loops.items():
+        rows = data.index[data["variable"] == controlled]
+        if not len(rows):
+            continue
+        c = data.loc[rows, ["batch_id", "elapsed_h", "z"]].reset_index()
+        e = data.loc[data["variable"] == effort, ["batch_id", "elapsed_h", "z"]]
+        e = e.rename(columns={"z": "z_effort", "elapsed_h": "effort_h"})
+        merged = pd.merge_asof(
+            c.sort_values("elapsed_h"),
+            e.sort_values("effort_h"),
+            left_on="elapsed_h",
+            right_on="effort_h",
+            by="batch_id",
+            direction="nearest",
+            tolerance=1.0,
+        ).set_index("index")
+        # The output that corrects a low reading is "more" when it raises the variable.
+        sign = np.where((merged["z"] < 0) == bool(raises), 1.0, -1.0)
+        push = sign * merged["z_effort"].to_numpy()
+        data.loc[merged.index, "stat_loop_check"] = loop_check(
+            merged["z"].to_numpy(), push, config.loop_response_z
+        )
 
 
 def loo_peak_statistics(
-    measurements: pd.DataFrame, approved: list[str], config: MonitorConfig
+    measurements: pd.DataFrame,
+    approved: list[str],
+    config: MonitorConfig,
+    control_loops: dict | None = None,
 ) -> dict[str, dict[str, dict[str, float]]]:
     """Per detector and variable: each approved batch's peak |statistic| when scored
     against a reference built without it (batch id -> peak)."""
@@ -104,7 +138,9 @@ def loo_peak_statistics(
         d: {v: {} for v in VARIABLES} for d in DETECTORS
     }
     for held_out in approved:
-        ref = build_reference(measurements, [b for b in approved if b != held_out], config.window_h)
+        ref = build_reference(
+            measurements, [b for b in approved if b != held_out], config.window_h, control_loops
+        )
         s = score(measurements[measurements["batch_id"] == held_out], ref, config)
         for d in DETECTORS:
             batch_peaks = s.groupby("variable")[f"stat_{d}"].apply(
@@ -141,9 +177,16 @@ def _alerting_batches(peaks, limits: dict, detectors) -> set[str]:
 
 
 def fit_reference(
-    measurements: pd.DataFrame, approved_batch_ids, config: MonitorConfig = DEFAULT_CONFIG
+    measurements: pd.DataFrame,
+    approved_batch_ids,
+    config: MonitorConfig = DEFAULT_CONFIG,
+    control_loops: dict | None = None,
 ) -> ReferenceProfile:
-    """Phase I: build the reference and calibrate frozen per-variable limits."""
+    """Phase I: build the reference and calibrate frozen per-variable limits.
+
+    ``control_loops`` maps a controlled variable to (its controller output variable,
+    whether raising the output raises the variable); it enables the loop check.
+    """
     approved = sorted(set(approved_batch_ids))
     if len(approved) < config.min_reference_batches:
         raise ValueError(
@@ -161,7 +204,7 @@ def fit_reference(
     if not all(0.5 <= q <= 1.0 for q in quantiles.values()):
         raise ValueError("calibration quantiles must be between 0.5 and 1.0")
 
-    peaks = loo_peak_statistics(measurements, approved, config)
+    peaks = loo_peak_statistics(measurements, approved, config, control_loops)
     margin = config.calibration_margin
     if config.false_alarm_budget is not None:
         # Tighten the robust-threshold limit step by step while the share of approved
@@ -201,7 +244,7 @@ def fit_reference(
         "approved_batches_alerting": sorted(alerting),
         "config": asdict(config),
     }
-    return build_reference(measurements, approved, config.window_h).with_thresholds(
+    return build_reference(measurements, approved, config.window_h, control_loops).with_thresholds(
         thresholds, calibration
     )
 
@@ -236,6 +279,8 @@ def monitor(
     alerts: list[Alert] = []
     for (batch_id, variable), g in scores.groupby(["batch_id", "variable"], sort=False):
         for d in config.detectors:
+            if d not in reference.thresholds:  # a profile saved before this detector existed
+                continue
             stat = g[f"stat_{d}"].to_numpy()
             limit = reference.thresholds[d][variable]
             exceed = np.nan_to_num(np.abs(stat), nan=0.0) > limit

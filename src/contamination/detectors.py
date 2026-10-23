@@ -10,6 +10,12 @@ statistic. An alert is raised where ``|statistic| > limit``.
   smaller sustained shifts. Default limit ``L * sqrt(lambda / (2 - lambda))``.
 * ``cusum``: two-sided tabular CUSUM, ``S+_t = max(0, S+_{t-1} + z_t - k)`` and
   ``S-_t = max(0, S-_{t-1} - z_t - k)``. Accumulates evidence of a persistent shift.
+* ``loop_check``: for a controlled variable (pH, temperature) whose controller output
+  is recorded, the robust z of the variable at readings where the controller is *not*
+  pushing back (its output's z in the correcting direction is below a small margin),
+  and 0 where it is. A healthy loop answers a drift by working harder; a drift with no
+  response points at the actuator. Computed in ``monitor.score`` because it needs two
+  variables.
 
 These are measures of how unusual the process is. None of them is a probability of
 contamination.
@@ -21,7 +27,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-ALGORITHM_VERSION = "0.1.0"
+ALGORITHM_VERSION = "0.2.0"
 
 
 @dataclass(frozen=True)
@@ -36,6 +42,9 @@ DETECTORS: dict[str, DetectorSpec] = {
     ),
     "ewma": DetectorSpec("ewma", "Sustained shift in the smoothed (EWMA) deviation"),
     "cusum": DetectorSpec("cusum", "Accumulated persistent deviation (two-sided CUSUM)"),
+    "loop_check": DetectorSpec(
+        "loop_check", "Controlled variable off its reference while its controller does not respond"
+    ),
 }
 
 
@@ -71,6 +80,18 @@ def cusum(z: np.ndarray, k: float = 0.5) -> np.ndarray:
     return out
 
 
+def loop_check(z_controlled: np.ndarray, push: np.ndarray, response_z: float) -> np.ndarray:
+    """Controlled-variable z where the controller is not pushing back, else 0.
+
+    ``push`` is the controller output's z in the direction that would correct the
+    current deviation. NaN where either is unknown.
+    """
+    zc, pu = np.asarray(z_controlled, float), np.asarray(push, float)
+    out = np.where(pu < response_z, zc, 0.0)
+    out[~(np.isfinite(zc) & np.isfinite(pu))] = np.nan
+    return out
+
+
 def statistics(z: np.ndarray, ewma_lambda: float, cusum_k: float) -> dict[str, np.ndarray]:
     return {
         "robust_threshold": np.asarray(z, float),
@@ -84,4 +105,5 @@ def default_limits(ewma_lambda: float, ewma_L: float, robust_limit: float, cusum
         "robust_threshold": robust_limit,
         "ewma": ewma_limit(ewma_L, ewma_lambda),
         "cusum": cusum_h,
+        "loop_check": robust_limit,
     }

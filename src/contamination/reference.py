@@ -112,6 +112,7 @@ def build_reference(
     measurements: pd.DataFrame,
     batch_ids,
     window_h: float = 1.0,
+    control_loops: dict | None = None,
 ) -> ReferenceProfile:
     """Phase I: estimate robust per-hour reference statistics from approved batches."""
     batch_ids = tuple(sorted(set(batch_ids)))
@@ -137,4 +138,8 @@ def build_reference(
             )
 
     stats = pd.DataFrame(rows, columns=STATS_COLUMNS)
-    return ReferenceProfile(stats=stats, batch_ids=batch_ids, params={"window_h": window_h})
+    params: dict = {"window_h": window_h}
+    if control_loops:
+        # {controlled variable: [controller output variable, output raises the variable]}
+        params["control_loops"] = {c: [e, bool(r)] for c, (e, r) in sorted(control_loops.items())}
+    return ReferenceProfile(stats=stats, batch_ids=batch_ids, params=params)

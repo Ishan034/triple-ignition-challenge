@@ -21,6 +21,7 @@ import pandas as pd
 
 from ..evaluate import per_batch
 from ..pipeline import fit, load_campaign, run_campaign
+from ..uncertainty import median_text, rate
 from .indpensim import reference_batches
 
 CAVEAT = (
@@ -125,6 +126,16 @@ def evaluate_indpensim(campaign_dir: Path, out_dir: Path = Path("outputs/indpens
     print("Held-out NORMAL batches (false alarms):")
     print(by_control.to_string(), "\n")
     print("FAULT batches:", fault_summary)
+    print(
+        "With 95% ranges: normal batches flagged",
+        rate(int(normal["any_alert"].sum()), len(normal)),
+        "| faults caught",
+        rate(int(faults["flagged_after_onset"].sum()), len(faults)),
+        "| onset to alert",
+        median_text(faults["onset_to_alert_h"]),
+        "| wrongly called contamination",
+        rate(contamination_leading, len(df)),
+    )
     print(
         faults[
             [
