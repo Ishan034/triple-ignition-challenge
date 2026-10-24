@@ -92,3 +92,45 @@ def test_external_datasets_open(dataset):
     at = _app("Campaign overview", dataset)
     assert any(m.label == "Batches monitored" for m in at.metric)
     assert any("approved batches (reference_batches.txt" in c.value for c in at.sidebar.caption)
+
+
+@pytest.fixture(autouse=True)
+def _records_in_tmp(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONTAMINATION_RECORDS", str(tmp_path / "records"))
+
+
+def test_feedback_and_checks_survive_a_new_session():
+    at = _app("Batch investigation")
+    next(r for r in at.radio if r.label == "Verdict").set_value("real issue")
+    next(b for b in at.button if b.label == "Save feedback").click()
+    at.run()
+    next(b for b in at.button if b.label == "Add result").click()
+    at.run()
+    assert not at.exception
+    fresh = _app("Campaign overview")  # a new browser session
+    assert any("feedback on alerts:** 1 reviewed" in md.value for md in fresh.markdown)
+    assert any("1 check results, 1 alert verdicts" in e.label for e in fresh.sidebar.expander)
+
+
+def test_false_alarm_budget_slider():
+    at = _app("Campaign overview")
+    at.sidebar.select_slider[0].set_value(0.10)
+    at.run()
+    assert not at.exception
+    assert any("false-alarm budget 10%" in c.value for c in at.sidebar.caption)
+
+
+def test_long_batch_page_opens():
+    """IndPenSim batches run past 200 h; every tab of the batch page must still render."""
+    at = _app("Batch investigation", "IndPenSim (simulated penicillin, equipment faults)")
+    batch = next(s for s in at.selectbox if s.label == "Batch")
+    batch.set_value("P091")
+    at.run()
+    assert not at.exception, [e.message for e in at.exception]
+
+
+def test_default_dataset_is_the_synthetic_demo():
+    at = AppTest.from_file(APP, default_timeout=180)
+    at.run()
+    assert at.sidebar.selectbox[0].value == "Synthetic demo (simulated contamination)"
+    assert not at.sidebar.text_input  # no free-text folder unless "Other folder…" is chosen

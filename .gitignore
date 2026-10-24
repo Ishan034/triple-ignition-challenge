@@ -11,3 +11,6 @@ data/external/
 
 # Plant data uploaded through the dashboard (confidential, never committed)
 data/imported/
+
+# Check results and alert feedback recorded in the dashboard, and per-setting reference caches
+data/records/

@@ -37,6 +37,8 @@ Pick the dataset in the sidebar: the **synthetic demo**, **IndPenSim** (100 simu
 
 A "Show known outcomes" toggle shows the answers for evaluation (simulated truth, fault labels, or final potency). The model never sees them.
 
+A **false-alarm budget** slider (1–20%, default 5%) sets how tight the alert limits are: at most that share of the approved normal batches would have alerted. A new setting recalibrates once and is cached. **Check results and alert feedback are saved** per dataset in `data/records/` (kept out of git) and reloaded next time; the sidebar's *Saved records* panel downloads them and restores them from a downloaded file (needed on Streamlit Cloud, whose disk is wiped when the app restarts).
+
 ### Deploying (Streamlit Community Cloud)
 
 On [share.streamlit.io](https://share.streamlit.io), create an app from this repo: branch `main`, main file `app/dashboard.py`, Python 3.13 (under Advanced settings). Dependencies come from `requirements.txt`, and the simulated campaign in `data/synthetic/` is committed, so nothing else is needed. Set sharing to invite-only to keep it to the team.
@@ -76,6 +78,7 @@ The demo generates synthetic batches, validates them, fits a frozen reference on
 | `datasets/indpensim.py`, `datasets/erythromycin.py` | external data | Download and convert external datasets into campaign folders; evaluate on them |
 | `importer.py` | 1 · evidence acquisition | Convert a plant's own exports (any layout, described by `mapping.yaml`) into a campaign; readiness report |
 | `value.py` | decision support | Yearly value estimate from the plant's own figures |
+| `records.py` | decision support | Check results and alert feedback recorded in the dashboard, saved per campaign |
 | `knowledge/profiles/*.yaml` | 5 · knowledge base | Process profiles mapping the rule book's roles (biomass, oxygen, pH, product, temperature) to each process's variables |
 | `robustness.py` | validation | Multi-seed evaluation of detection and diagnosis |
 | `multivariate.py` | validation | PCA (Hotelling T² / SPE) benchmark under the same false-alarm budget: comparison only |

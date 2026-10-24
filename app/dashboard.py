@@ -13,6 +13,7 @@ import io
 import sys
 import tempfile
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 
 # Import the model from this checkout's src/, not from an installed copy. Streamlit
@@ -42,8 +43,10 @@ if _loaded is not None and (
     st.cache_data.clear()
 
 import contamination
+from contamination import records
 from contamination.evaluate import per_batch
 from contamination.importer import convert, readiness
+from contamination.monitor import DEFAULT_CONFIG
 from contamination.pipeline import (
     diagnose_batch_as_of,
     diagnosis_timeline,
@@ -67,7 +70,8 @@ POSSIBLE = "#9e9d98"
 CASE = "#2a78d6"
 TEMPLATE_DIR = Path("docs/data-template")
 IMPORT_ROOT = Path("data/imported")
-FEEDBACK_COLUMNS = ["batch_id", "variable", "detector", "start_h", "verdict", "note"]
+FEEDBACK_COLUMNS = records.FEEDBACK_COLUMNS
+BUDGETS = (0.01, 0.02, 0.05, 0.10, 0.20)
 DATASETS = {
     "Synthetic demo (simulated contamination)": "data/synthetic",
     "IndPenSim (simulated penicillin, equipment faults)": "data/indpensim",
@@ -102,15 +106,20 @@ st.set_page_config(page_title="Contamination investigation", page_icon="🧫", l
     show_spinner="Loading the campaign and fitting the reference profile "
     "(the first time on a large dataset this takes a few minutes)…"
 )
-def get_campaign(data_dir: str, n_reference: int):
+def get_campaign(data_dir: str, n_reference: int, budget: float):
     campaign = load_campaign(data_dir, n_reference)
-    return campaign, fit_cached(campaign)
+    config = config_for(budget)
+    return campaign, fit_cached(campaign, config, records.records_dir(data_dir))
+
+
+def config_for(budget: float):
+    return replace(DEFAULT_CONFIG, false_alarm_budget=budget)
 
 
 @st.cache_resource(show_spinner="Detecting, diagnosing and tracing sources…")
-def get_result(data_dir: str, n_reference: int, investigations_csv: str):
-    campaign, reference = get_campaign(data_dir, n_reference)
-    return run_campaign(campaign, reference, _inv_from_csv(investigations_csv))
+def get_result(data_dir: str, n_reference: int, budget: float, investigations_csv: str):
+    campaign, reference = get_campaign(data_dir, n_reference, budget)
+    return run_campaign(campaign, reference, _inv_from_csv(investigations_csv), config_for(budget))
 
 
 def _inv_from_csv(text: str) -> pd.DataFrame:
@@ -133,9 +142,61 @@ def feedback() -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner="Replaying the batch hour by hour…")
-def get_timeline(data_dir: str, n_reference: int, batch_id: str, investigations_csv: str):
-    campaign, reference = get_campaign(data_dir, n_reference)
-    return diagnosis_timeline(campaign, reference, batch_id, _inv_from_csv(investigations_csv))
+def get_timeline(
+    data_dir: str, n_reference: int, budget: float, batch_id: str, investigations_csv: str
+):
+    campaign, reference = get_campaign(data_dir, n_reference, budget)
+    return diagnosis_timeline(
+        campaign, reference, batch_id, _inv_from_csv(investigations_csv), config_for(budget)
+    )
+
+
+def record_check(row: pd.DataFrame) -> None:
+    """Save a check result for this campaign and add it to the session."""
+    saved = pd.concat([records.load_checks(data_dir), row], ignore_index=True)
+    records.save_checks(data_dir, saved)
+    st.session_state["investigations_csv"] = pd.concat(
+        [investigations(), row], ignore_index=True
+    ).to_csv(index=False)
+
+
+def record_feedback(row: pd.DataFrame) -> None:
+    saved = pd.concat([records.load_feedback(data_dir), row], ignore_index=True)
+    records.save_feedback(data_dir, saved)
+    st.session_state["feedback_csv"] = records.load_feedback(data_dir).to_csv(index=False)
+
+
+def records_panel() -> None:
+    """Sidebar: what has been recorded for this campaign, download and restore."""
+    checks, fb = records.load_checks(data_dir), records.load_feedback(data_dir)
+    with st.expander(f"Saved records: {len(checks)} check results, {len(fb)} alert verdicts"):
+        st.caption(
+            "Check results and alert feedback are saved for this dataset and reloaded next "
+            "time. On a hosted app the server's disk is wiped when the app restarts: download "
+            "them, and upload the file here to restore."
+        )
+        c1, c2 = st.columns(2)
+        c1.download_button(
+            "Checks CSV", checks.to_csv(index=False), "recorded_checks.csv", "text/csv"
+        )
+        c2.download_button("Feedback CSV", fb.to_csv(index=False), "alert_feedback.csv", "text/csv")
+        upload = st.file_uploader("Restore from a downloaded CSV", type=["csv"], key="restore")
+        if upload is not None and st.button("Restore"):
+            df = pd.read_csv(upload, dtype={"note": "object"})
+            try:
+                if "verdict" in df.columns:
+                    records.save_feedback(
+                        data_dir, records.merge_upload(fb, df, records.FEEDBACK_COLUMNS)
+                    )
+                else:
+                    records.save_checks(
+                        data_dir, records.merge_upload(checks, df, INVESTIGATION_COLUMNS)
+                    )
+            except ValueError as e:
+                st.error(str(e))
+                return
+            st.session_state.pop("loaded_from", None)  # reload the session from disk
+            st.rerun()
 
 
 # --------------------------------------------------------------------------- sidebar
@@ -148,7 +209,7 @@ with st.sidebar:
             choices[f"Imported: {folder.name}"] = str(folder)
     wanted = st.session_state.get("data_dir")
     labels = list(choices) + [OTHER]
-    index = next((i for i, k in enumerate(labels) if choices.get(k) == wanted), 0)
+    index = next((i for i, k in enumerate(labels) if wanted and choices.get(k) == wanted), 0)
     dataset = st.selectbox("Dataset", labels, index=index)
     data_dir = (
         st.text_input("Campaign folder", wanted or "data/synthetic")
@@ -162,13 +223,25 @@ with st.sidebar:
     n_reference = (
         30 if has_list else st.number_input("Approved reference batches (earliest)", 5, 1000, 30)
     )
-    campaign, reference = get_campaign(data_dir, int(n_reference))
+    budget = st.select_slider(
+        "False-alarm budget",
+        options=BUDGETS,
+        value=DEFAULT_CONFIG.false_alarm_budget,
+        format_func=lambda b: f"{b:.0%}",
+        help="At most this share of the approved normal batches would have raised an alert. "
+        "Lower: fewer false alarms, later or missed detections. Higher: earlier detection, more "
+        "batches to review. A new setting recalibrates the limits (up to a few minutes on a "
+        "large dataset, once).",
+    )
+    campaign, reference = get_campaign(data_dir, int(n_reference), budget)
     if (
         "investigations_csv" not in st.session_state
         or st.session_state.get("loaded_from") != data_dir
     ):
-        st.session_state["investigations_csv"] = campaign.investigations.to_csv(index=False)
-        st.session_state["feedback_csv"] = ""
+        st.session_state["investigations_csv"] = pd.concat(
+            [campaign.investigations, records.load_checks(data_dir)], ignore_index=True
+        ).to_csv(index=False)
+        st.session_state["feedback_csv"] = records.load_feedback(data_dir).to_csv(index=False)
         st.session_state["loaded_from"] = data_dir
     page = st.radio(
         "View",
@@ -192,11 +265,13 @@ with st.sidebar:
         )
     st.caption(
         f"Reference `{reference.version}` · {len(reference.batch_ids)} approved batches "
-        f"({campaign.reference_source}) · {len(campaign.monitored_ids)} monitored"
+        f"({campaign.reference_source}) · {len(campaign.monitored_ids)} monitored · "
+        f"false-alarm budget {budget:.0%}"
     )
+    records_panel()
 
 kb = campaign.kb
-result = get_result(data_dir, int(n_reference), st.session_state["investigations_csv"])
+result = get_result(data_dir, int(n_reference), budget, st.session_state["investigations_csv"])
 origin = (
     " ".join(campaign.outcomes["data_origin"].dropna().astype(str).unique())
     if campaign.outcomes is not None and "data_origin" in campaign.outcomes
@@ -425,7 +500,7 @@ def page_overview():
     st.dataframe(
         table,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         column_config={
             "start": st.column_config.DatetimeColumn(format="YYYY-MM-DD"),
             "first_alert_h": st.column_config.NumberColumn("first alert (h)", format="%.1f"),
@@ -459,7 +534,7 @@ def page_batch():
     as_of = right.slider("As of elapsed hour", 0.0, max_h, max_h, 0.5) if replay else None
 
     inv = investigations()
-    diag = diagnose_batch_as_of(campaign, reference, batch_id, as_of, inv)
+    diag = diagnose_batch_as_of(campaign, reference, batch_id, as_of, inv, config_for(budget))
     report = diag.reports.get(batch_id)
     scores, alerts = diag.monitor_result.scores, diag.monitor_result.alerts
     full_report = result.diagnosis.reports.get(batch_id)
@@ -478,7 +553,7 @@ def page_batch():
         )
         st.info(f"Known outcome: **{o['scenario']}**: {o['reason']}{extra}")
     st.plotly_chart(
-        batch_figure(batch_id, scores, alerts, as_of), use_container_width=True, theme="streamlit"
+        batch_figure(batch_id, scores, alerts, as_of), width="stretch", theme="streamlit"
     )
 
     if report is None:
@@ -536,7 +611,7 @@ def page_batch():
                 for h in report.hypotheses
             ]
         )
-        st.dataframe(hyp, hide_index=True, use_container_width=True)
+        st.dataframe(hyp, hide_index=True, width="stretch")
         st.caption(
             "Score = supporting weights − contradicting weights. It orders explanations for review; it is not a probability."
         )
@@ -554,9 +629,10 @@ def page_batch():
             "reference_median_at_peak",
             "robust_z_at_peak",
             "corroborating_variables",
+            "detail",
             "data_quality_warnings",
         ]
-        st.dataframe(al[cols], hide_index=True, use_container_width=True)
+        st.dataframe(al[cols], hide_index=True, width="stretch")
     with t3:
         ev = pd.DataFrame(
             [
@@ -564,7 +640,7 @@ def page_batch():
                 for e in report.evidence.values()
             ]
         )
-        st.dataframe(ev, hide_index=True, use_container_width=True)
+        st.dataframe(ev, hide_index=True, width="stretch")
     with t4:
         st.subheader("Recommended next checks")
         for i, ch in enumerate(report.next_checks, 1):
@@ -590,7 +666,7 @@ def page_batch():
             hour = f3.number_input(
                 "Result available at (elapsed h)",
                 0.0,
-                200.0,
+                max(200.0, max_h + 48.0),  # long batches run past 200 h
                 float(as_of if as_of is not None else max_h),
             )
             note = st.text_input("Note")
@@ -598,13 +674,11 @@ def page_batch():
                 row = pd.DataFrame(
                     [[batch_id, check, res, hour, note or None]], columns=INVESTIGATION_COLUMNS
                 )
-                st.session_state["investigations_csv"] = pd.concat(
-                    [inv, row], ignore_index=True
-                ).to_csv(index=False)
+                record_check(row)
                 st.rerun()
         batch_inv = inv[inv["batch_id"] == batch_id]
         if len(batch_inv):
-            st.dataframe(batch_inv, hide_index=True, use_container_width=True)
+            st.dataframe(batch_inv, hide_index=True, width="stretch")
         st.download_button(
             "Download all recorded checks (CSV)",
             st.session_state["investigations_csv"],
@@ -628,7 +702,9 @@ def timeline_section(batch_id: str):
         "The batch replayed hour by hour, using only the results available at each hour: "
         "when the first alert came, and when each explanation first became the leading one."
     )
-    tl = get_timeline(data_dir, int(n_reference), batch_id, st.session_state["investigations_csv"])
+    tl = get_timeline(
+        data_dir, int(n_reference), budget, batch_id, st.session_state["investigations_csv"]
+    )
     if tl.empty:
         st.write("No alerts in this batch.")
         return
@@ -659,13 +735,13 @@ def timeline_section(batch_id: str):
     fig.update_layout(
         height=320, margin={"l": 10, "r": 10, "t": 40, "b": 10}, xaxis_title="Elapsed time (h)"
     )
-    st.plotly_chart(fig, use_container_width=True, theme="streamlit")
+    st.plotly_chart(fig, width="stretch", theme="streamlit")
     named = first_named(tl)
     if len(named):
         st.dataframe(
             named.rename(columns={"hour": "first leading at (h)"}),
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )
 
 
@@ -683,7 +759,7 @@ def feedback_section(batch_id: str, alerts):
     }
     with st.form("alert_feedback", clear_on_submit=True):
         choice = st.selectbox("Alert", list(labels))
-        verdict = st.radio("Verdict", ["real issue", "false alarm", "not sure"], horizontal=True)
+        verdict = st.radio("Verdict", list(records.VERDICTS), horizontal=True)
         note = st.text_input("Note (what was found)")
         if st.form_submit_button("Save feedback"):
             a = labels[choice]
@@ -691,13 +767,11 @@ def feedback_section(batch_id: str, alerts):
                 [[batch_id, a.variable, a.detector, a.start_h, verdict, note or None]],
                 columns=FEEDBACK_COLUMNS,
             )
-            st.session_state["feedback_csv"] = pd.concat(
-                [feedback(), row], ignore_index=True
-            ).to_csv(index=False)
+            record_feedback(row)
             st.rerun()
     fb = feedback()
     if len(fb[fb["batch_id"] == batch_id]):
-        st.dataframe(fb[fb["batch_id"] == batch_id], hide_index=True, use_container_width=True)
+        st.dataframe(fb[fb["batch_id"] == batch_id], hide_index=True, width="stretch")
     if len(fb):
         st.download_button(
             "Download all alert feedback (CSV)",
@@ -773,8 +847,8 @@ def page_timing():
         xaxis_title="hours",
         legend={"orientation": "h", "y": 1.05},
     )
-    st.plotly_chart(fig, use_container_width=True, theme="streamlit")
-    st.dataframe(pb, hide_index=True, use_container_width=True)
+    st.plotly_chart(fig, width="stretch", theme="streamlit")
+    st.dataframe(pb, hide_index=True, width="stretch")
     st.caption("Uses the outcomes table (known answers): evaluation only, never seen by the model.")
     if synthetic:
         st.caption(
@@ -872,11 +946,11 @@ def page_value():
     fig.update_layout(
         height=300, margin={"l": 10, "r": 10, "t": 10, "b": 10}, yaxis={"autorange": "reversed"}
     )
-    st.plotly_chart(fig, use_container_width=True, theme="streamlit")
+    st.plotly_chart(fig, width="stretch", theme="streamlit")
     st.dataframe(
         table,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         column_config={"value_per_year": st.column_config.NumberColumn(format="%,.0f")},
     )
 
@@ -938,7 +1012,7 @@ def page_load():
         r = readiness(target)
         icon = {"ok": "✅", "warn": "⚠️", "missing": "❌"}
         r.insert(0, "", r["status"].map(icon))
-        st.dataframe(r, hide_index=True, use_container_width=True)
+        st.dataframe(r, hide_index=True, width="stretch")
         if st.button(f"Monitor `{target}` now"):
             st.session_state["data_dir"] = target
             st.rerun()
@@ -956,7 +1030,7 @@ def page_tracing():
     if not trace.candidates:
         st.info("No contamination cases, so there is nothing to trace.")
         return
-    st.plotly_chart(genealogy_figure(trace), use_container_width=True, theme="streamlit")
+    st.plotly_chart(genealogy_figure(trace), width="stretch", theme="streamlit")
     for i, c in enumerate(trace.clusters, 1):
         st.markdown(
             f"**Cluster {i}:** cases {', '.join(c['cases'])}, linked by {', '.join(c['linked_by'])}"
@@ -977,7 +1051,7 @@ def page_tracing():
     st.dataframe(
         trace.table()[cols],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         column_config={
             "attack_rate": st.column_config.NumberColumn(format="percent"),
             "attack_rate_elsewhere": st.column_config.NumberColumn(format="percent"),
@@ -986,7 +1060,7 @@ def page_tracing():
         },
     )
     with st.expander("Batch statuses used for tracing"):
-        st.dataframe(truth_columns(trace.statuses), hide_index=True, use_container_width=True)
+        st.dataframe(truth_columns(trace.statuses), hide_index=True, width="stretch")
 
 
 def page_about():

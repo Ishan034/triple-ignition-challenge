@@ -129,24 +129,37 @@ def _fingerprint(campaign: Campaign, config: MonitorConfig) -> str:
     return h.hexdigest()[:16]
 
 
-def fit_cached(campaign: Campaign, config: MonitorConfig = DEFAULT_CONFIG) -> ReferenceProfile:
-    """Fit, or reuse ``reference_profile.json`` in the campaign folder when it was fitted
-    on the same measurements, approved batches and settings (calibration on hundreds of
-    batches takes minutes)."""
+def fit_cached(
+    campaign: Campaign,
+    config: MonitorConfig = DEFAULT_CONFIG,
+    extra_cache_dir: str | Path | None = None,
+) -> ReferenceProfile:
+    """Fit, or reuse a reference fitted on the same measurements, approved batches,
+    detectors and settings (calibration on hundreds of batches takes minutes).
+
+    The campaign folder's ``reference_profile.json`` holds the default settings' fit;
+    fits for other settings (e.g. another false-alarm budget chosen in the dashboard)
+    go to ``extra_cache_dir`` when given, one file per settings fingerprint.
+    """
     if campaign.data_dir is None:
         return fit(campaign, config)
-    key, path = _fingerprint(campaign, config), campaign.data_dir / REFERENCE_CACHE
-    if path.exists():
-        try:
-            cached = ReferenceProfile.load(path)
-            if cached.calibration.get("fingerprint") == key:
-                return cached
-        except (ValueError, KeyError):
-            pass
+    key = _fingerprint(campaign, config)
+    main = campaign.data_dir / REFERENCE_CACHE
+    extra = Path(extra_cache_dir) / f"reference_{key}.json" if extra_cache_dir else None
+    for path in (main, extra):
+        if path is not None and path.exists():
+            try:
+                cached = ReferenceProfile.load(path)
+                if cached.calibration.get("fingerprint") == key:
+                    return cached
+            except (ValueError, KeyError):
+                pass
     reference = fit(campaign, config)
     reference.calibration["fingerprint"] = key
+    target = main if (config == DEFAULT_CONFIG or extra is None) else extra
     try:
-        reference.save(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        reference.save(target)
     except OSError:
         pass  # read-only folder: just don't cache
     return reference
