@@ -60,6 +60,8 @@ class Knowledge:
     source_tracing: dict = field(default_factory=dict)
     roles: dict = field(default_factory=dict)
     control_loops: dict = field(default_factory=dict)
+    # Physically linked signals for the linked-shift detector (measured variable names).
+    linked_signals: tuple[str, ...] = ()
 
     @property
     def linked(self) -> tuple[str, ...]:
@@ -104,6 +106,8 @@ def load_knowledge(
             ppath = PROFILES_DIR / f"{profile}.yaml"
         prof = yaml.safe_load(ppath.read_text())
         d["roles"] = prof.get("roles", d.get("roles", {}))
+        if "linked_signals" in prof:
+            d["linked_signals"] = prof["linked_signals"]
         d["parameters"] = {**d["parameters"], **prof.get("parameters", {})}
         unknown = set(prof.get("parameters", {})) - set(
             yaml.safe_load(Path(path).read_text())["parameters"]
@@ -148,6 +152,7 @@ def load_knowledge(
         d.get("source_tracing", {}),
         roles,
         loops,
+        tuple(roles.get(x, x) for x in d.get("linked_signals", [])),
     )
 
 
@@ -213,9 +218,17 @@ class DiagnosisReport:
             "## 1. What changed?",
         ]
         by_var: dict[str, list[Alert]] = {}
+        linked = [a for a in self.alerts if a.detector == "linked_shift"]
         for a in self.alerts:
-            by_var.setdefault(a.variable, []).append(a)
-        if not by_var:
+            if a.detector != "linked_shift":
+                by_var.setdefault(a.variable, []).append(a)
+        if linked:
+            first = min(linked, key=lambda a: a.first_raised_h)
+            lines.append(
+                f"- **Linked signals changed together** from {first.start_h:g} h "
+                f"(first raised {first.first_raised_h:g} h): {first.detail.split(': ', 1)[-1]}"
+            )
+        if not by_var and not linked:
             lines.append("- No alerts.")
         for var, al in sorted(by_var.items(), key=lambda kv: min(a.first_raised_h for a in kv[1])):
             first = min(al, key=lambda a: a.first_raised_h)
@@ -534,6 +547,10 @@ def compute_evidence(
     dz = p["deviation_z"]
     s = scores[scores["batch_id"] == batch_id]
     control = kb.control_variables
+    # A linked-shift alert sits on the group's first signal but stands for several
+    # signals changing together: it is evidence E01, not a deviation of that one signal.
+    linked = [a for a in alerts if a.detector == "linked_shift"]
+    alerts = [a for a in alerts if a.detector != "linked_shift"]
     persistent = {a.variable for a in alerts if a.persistence == "persistent"} - control
     alerted = {a.variable for a in alerts} - control
     has = {r[role]: bool(len(_var(s, r[role]))) for role in ROLES}
@@ -544,6 +561,13 @@ def compute_evidence(
         "present" if len(multi) >= p["multi_signal_min_variables"] else "absent",
         f"Persistent alerts on: {', '.join(multi) or 'none'}.",
     )
+    persistent_linked = [a for a in linked if a.persistence == "persistent"]
+    if persistent_linked:
+        first = min(persistent_linked, key=lambda a: a.start_h)
+        out["E01"] = (
+            "present",
+            f"Linked signals changed together from {first.start_h:g} h ({first.detail}).",
+        )
     out["E02"] = (
         "present" if len(alerted) == 1 else "absent",
         f"Variables alerted: {', '.join(sorted(alerted)) or 'none'}.",

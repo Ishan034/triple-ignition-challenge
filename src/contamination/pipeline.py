@@ -105,7 +105,11 @@ def load_campaign(
 
 def fit(campaign: Campaign, config: MonitorConfig = DEFAULT_CONFIG) -> ReferenceProfile:
     return fit_reference(
-        campaign.measurements, campaign.reference_ids, config, campaign.kb.measured_control_loops
+        campaign.measurements,
+        campaign.reference_ids,
+        config,
+        campaign.kb.measured_control_loops,
+        list(campaign.kb.linked_signals),
     )
 
 
@@ -118,6 +122,7 @@ def _fingerprint(campaign: Campaign, config: MonitorConfig) -> str:
                 sorted(campaign.reference_ids),
                 asdict(config),
                 campaign.kb.measured_control_loops,
+                campaign.kb.linked_signals,
             )
         ).encode()
     )

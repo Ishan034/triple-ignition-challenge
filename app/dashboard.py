@@ -997,7 +997,7 @@ The system helps scientists investigate contamination faster. **It supports deci
 
 1. **Check the data.** Readings that are missing, implausible, in the wrong unit or duplicated are flagged, never silently deleted or filled with zero.
 2. **Learn what normal looks like.** From batches scientists approve as normal, it learns the typical value of each measurement at each hour, and how much it usually varies. This *reference profile* is then frozen and versioned.
-3. **Spot unusual behaviour.** Each new reading is compared with the reference. Simple detectors raise alerts: a single reading far from normal, a sustained drift (EWMA), an accumulating shift (CUSUM) and, where controller outputs are recorded, a control-loop check (pH or temperature drifting while its pump or cooling does not respond). How tight the limits are is set by a false-alarm budget: at most 5% of known-normal batches would have alerted. Every alert shows what changed, by how much, and when.
+3. **Spot unusual behaviour.** Each new reading is compared with the reference. Simple detectors raise alerts: a single reading far from normal, a sustained drift (EWMA), an accumulating shift (CUSUM), a linked-signal check (at least two linked signals such as CO₂ output and dissolved oxygen changing together from the batch's own recent past) and, where controller outputs are recorded, a control-loop check (pH or temperature drifting while its pump or cooling does not respond). How tight the limits are is set by a false-alarm budget: at most 5% of known-normal batches would have alerted. Every alert shows what changed, by how much, and when.
 4. **Suggest explanations.** A reviewable rule book (`knowledge/catalogue.yaml`) links patterns of evidence to explanations: contamination, slow growth, a raw-material/condition change, a sensor fault, or an equipment fault (for example a pump or cooling supply that stops responding, seen from the controller outputs when they are recorded). Explanations are ranked by a transparent score. When the evidence is thin, the answer is *"unresolved, too early to tell"*.
 5. **Recommend the next check.** It suggests the quickest, cheapest check that best separates the leading explanations, and keeps a contamination check on the list until contamination is ruled out.
 6. **Trace possible sources.** It asks what contaminated batches had in common (medium lot, inoculum lot, bioreactor) compared with clean batches.
@@ -1008,7 +1008,7 @@ The system helps scientists investigate contamination faster. **It supports deci
     st.markdown(
         f"""
 - Built and evaluated on **synthetic** α-amylase batches and on external data with no contamination (IndPenSim, a real erythromycin plant); real contamination-detection performance is unknown until tested on MaverickX data.
-- On realistic batch-to-batch variation (simulated contaminants added to IndPenSim batches), a contaminant is caught reliably once it changes respiration (CO₂ output, oxygen uptake) by about 40%, and mostly missed at 20% or less.
+- On realistic batch-to-batch variation (simulated contaminants added to IndPenSim batches), a contaminant that changes respiration (CO₂ output, oxygen uptake) by about 20% is caught in 27 of 30 batches within about 19 h; at 10% it is missed.
 - The rule book is a **draft** ({kb.review_status}).
 - Anomaly scores are not contamination probabilities, and no organism is identified from process data.
 - Source tracing only knows the recorded genealogy (medium lot, inoculum lot, bioreactor).

@@ -19,7 +19,14 @@ import numpy as np
 import pandas as pd
 
 from .alerts import Alert
-from .detectors import ALGORITHM_VERSION, DETECTORS, default_limits, loop_check, statistics
+from .detectors import (
+    ALGORITHM_VERSION,
+    DETECTORS,
+    default_limits,
+    loop_check,
+    own_baseline_change,
+    statistics,
+)
 from .ingest import valid_values
 from .reference import ReferenceProfile, build_reference
 from .schema import VARIABLES
@@ -29,7 +36,8 @@ NO_EVIDENCE = "none recorded (no independent test results supplied)"
 # threshold) and changes within a batch (shift) have heavy-tailed peaks across normal
 # batches, so their worst batch overstates the limit; EWMA and CUSUM on the raw z
 # accumulate each batch's persistent offset, so tightening them mostly adds false alarms.
-BUDGETED = ("robust_threshold", "shift")
+BUDGETED = ("robust_threshold", "shift", "linked_shift")
+LINKED_SMOOTH = 6  # readings averaged in the linked-shift statistic
 
 
 @dataclass(frozen=True)
@@ -62,7 +70,7 @@ class MonitorConfig:
     # it doubled the catch rate for simulated contamination on IndPenSim batches, but on
     # the real erythromycin plant it raised flagged batches from 9% to 39%
     # (docs/external-validation.md). Add it per process once its false alarms are known.
-    detectors: tuple[str, ...] = ("robust_threshold", "ewma", "cusum", "loop_check")
+    detectors: tuple[str, ...] = ("robust_threshold", "ewma", "cusum", "linked_shift", "loop_check")
 
 
 DEFAULT_CONFIG = MonitorConfig()
@@ -111,7 +119,70 @@ def score(
         data[f"stat_{d}"] = values
     data = data.reset_index(drop=True)
     _loop_statistics(data, reference.params.get("control_loops", {}), config)
+    _linked_statistics(data, reference.params.get("linked_shift"))
     return data
+
+
+def _smoothed_changes(data: pd.DataFrame, signals: list[str]) -> pd.DataFrame:
+    """(batch_id, hour) x signal: change from the batch's own past, smoothed."""
+    parts = []
+    sel = data[data["variable"].isin(signals)]
+    for (b, v), g in sel.groupby(["batch_id", "variable"], sort=False):
+        d = own_baseline_change(g["z"].to_numpy(), g["elapsed_h"].to_numpy())
+        dm = pd.Series(d).rolling(LINKED_SMOOTH, min_periods=LINKED_SMOOTH).mean().to_numpy()
+        parts.append(
+            pd.DataFrame({"batch_id": b, "variable": v, "hour": g["elapsed_h"].round(), "dm": dm})
+        )
+    if not parts:
+        return pd.DataFrame()
+    return pd.concat(parts).pivot_table(
+        index=["batch_id", "hour"], columns="variable", values="dm", aggfunc="mean"
+    )
+
+
+def linked_scales(data: pd.DataFrame, signals: list[str]) -> dict[str, float]:
+    """Normal spread (1.4826 x MAD) of each signal's smoothed change, from scored
+    approved batches; it puts the signals on one scale."""
+    dm = _smoothed_changes(data, signals)
+    out = {}
+    for v in signals:
+        x = dm[v].dropna().to_numpy() if v in dm else np.array([])
+        if len(x):
+            out[v] = max(float(1.4826 * np.median(np.abs(x - np.median(x)))), 1e-6)
+    return out
+
+
+def _linked_statistics(data: pd.DataFrame, linked: dict | None) -> None:
+    """Fill ``stat_linked_shift`` (second-largest scaled change in the group) on the
+    rows of the group's first signal, and name the signals that moved (in place)."""
+    data["linked_detail"] = ""
+    if not linked or len(linked["scales"]) < 2:
+        return
+    signals = [v for v in linked["signals"] if v in linked["scales"]]
+    dm = _smoothed_changes(data, signals)
+    if dm.empty:
+        return
+    scaled = dm.reindex(columns=signals).abs() / pd.Series(linked["scales"])[signals]
+    values = scaled.to_numpy()
+    filled = np.where(np.isfinite(values), values, -np.inf)
+    order = np.argsort(-filled, axis=1)
+    second = np.take_along_axis(filled, order[:, 1:2], axis=1).ravel()
+    second[np.isfinite(values).sum(axis=1) < 2] = np.nan
+    names = np.array(signals)[order[:, :2]]
+    table = pd.DataFrame(
+        {
+            "stat": second,
+            "detail": [f"{a}, {b}" for a, b in names],
+        },
+        index=scaled.index,
+    )
+    anchor = data.index[data["variable"] == signals[0]]
+    key = pd.MultiIndex.from_arrays(
+        [data.loc[anchor, "batch_id"], data.loc[anchor, "elapsed_h"].round()]
+    )
+    found = table.reindex(key)
+    data.loc[anchor, "stat_linked_shift"] = found["stat"].to_numpy()
+    data.loc[anchor, "linked_detail"] = found["detail"].fillna("").to_numpy()
 
 
 def _loop_statistics(data: pd.DataFrame, loops: dict, config: MonitorConfig) -> None:
@@ -145,6 +216,7 @@ def loo_peak_statistics(
     approved: list[str],
     config: MonitorConfig,
     control_loops: dict | None = None,
+    linked: dict | None = None,
 ) -> dict[str, dict[str, dict[str, float]]]:
     """Per detector and variable: each approved batch's peak |statistic| when scored
     against a reference built without it (batch id -> peak)."""
@@ -153,7 +225,11 @@ def loo_peak_statistics(
     }
     for held_out in approved:
         ref = build_reference(
-            measurements, [b for b in approved if b != held_out], config.window_h, control_loops
+            measurements,
+            [b for b in approved if b != held_out],
+            config.window_h,
+            control_loops,
+            linked,
         )
         s = score(measurements[measurements["batch_id"] == held_out], ref, config)
         for d in DETECTORS:
@@ -195,11 +271,13 @@ def fit_reference(
     approved_batch_ids,
     config: MonitorConfig = DEFAULT_CONFIG,
     control_loops: dict | None = None,
+    linked_signals: list[str] | None = None,
 ) -> ReferenceProfile:
     """Phase I: build the reference and calibrate frozen per-variable limits.
 
     ``control_loops`` maps a controlled variable to (its controller output variable,
     whether raising the output raises the variable); it enables the loop check.
+    ``linked_signals`` names physically linked signals for the linked-shift detector.
     """
     approved = sorted(set(approved_batch_ids))
     if len(approved) < config.min_reference_batches:
@@ -216,22 +294,32 @@ def fit_reference(
     if not all(0.5 <= q <= 1.0 for q in quantiles.values()):
         raise ValueError("calibration quantiles must be between 0.5 and 1.0")
 
-    peaks = loo_peak_statistics(measurements, approved, config, control_loops)
+    linked = None
+    present = set(measurements["variable"])
+    signals = [v for v in (linked_signals or []) if v in present]
+    if len(signals) >= 2:
+        base = build_reference(measurements, approved, config.window_h)
+        scored = score(measurements[measurements["batch_id"].isin(approved)], base, config)
+        scales = linked_scales(scored, signals)
+        if len(scales) >= 2:
+            linked = {"signals": [v for v in signals if v in scales], "scales": scales}
+    peaks = loo_peak_statistics(measurements, approved, config, control_loops, linked)
     margin = config.calibration_margin
     if config.false_alarm_budget is not None:
-        # Tighten the budgeted limits step by step while the share of approved
-        # batches that would have alerted (on any variable, any detector) stays within
-        # the budget. The budget is a batch-level false-alarm rate, so it does not grow
-        # with the number of monitored variables.
-        allowed = config.false_alarm_budget * len(approved)
-        for q in np.round(np.arange(config.threshold_calibration_quantile, 0.795, -0.005), 3):
-            trial = {**quantiles, **{d: float(q) for d in BUDGETED}}
-            alerting = _alerting_batches(
-                peaks, _limits(peaks, trial, defaults, margin), config.detectors
-            )
-            if len(alerting) > allowed:
-                break
-            quantiles = trial
+        # Tighten each budgeted detector's limits step by step while the approved batches
+        # it alone would have alerted on stay within its share of the budget. The budget
+        # is a batch-level false-alarm rate, split equally between the budgeted detectors
+        # in use, so it does not grow with the number of variables or detectors.
+        budgeted = [d for d in BUDGETED if d in config.detectors]
+        allowed = config.false_alarm_budget * len(approved) / max(len(budgeted), 1)
+        for d in budgeted:
+            start = quantiles[d]
+            for q in np.round(np.arange(start, 0.795, -0.005), 3):
+                trial = {**quantiles, d: float(q)}
+                alerting = _alerting_batches(peaks, _limits(peaks, trial, defaults, margin), [d])
+                if len(alerting) > allowed:
+                    break
+                quantiles = trial
     thresholds = _limits(peaks, quantiles, defaults, margin)
     alerting = _alerting_batches(peaks, thresholds, config.detectors)
     calibration = {
@@ -239,8 +327,8 @@ def fit_reference(
             "leave-one-out over approved batches; limit = max(default, margin * "
             "quantile of per-batch peak |statistic|)"
             + (
-                f"; robust-threshold and shift quantile chosen so at most {config.false_alarm_budget:.0%} "
-                "of approved batches would alert"
+                f"; budgeted detectors' quantiles chosen so at most {config.false_alarm_budget:.0%} "
+                "of approved batches would alert (budget split equally between them)"
                 if config.false_alarm_budget is not None
                 else ""
             )
@@ -256,9 +344,9 @@ def fit_reference(
         "approved_batches_alerting": sorted(alerting),
         "config": asdict(config),
     }
-    return build_reference(measurements, approved, config.window_h, control_loops).with_thresholds(
-        thresholds, calibration
-    )
+    return build_reference(
+        measurements, approved, config.window_h, control_loops, linked
+    ).with_thresholds(thresholds, calibration)
 
 
 def _episodes(exceed: np.ndarray) -> list[tuple[int, int]]:
@@ -322,6 +410,9 @@ def monitor(
                         robust_z_at_peak=round(float(row["z"]), 2),
                         algorithm_version=ALGORITHM_VERSION,
                         reference_version=reference.version,
+                        detail=f"linked signals moving together: {row['linked_detail']}"
+                        if d == "linked_shift"
+                        else "",
                     )
                 )
 

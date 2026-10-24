@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .diagnosis import diagnose
+from .diagnosis import diagnose, load_knowledge
 from .evaluate import (
     SYNTHETIC_CAVEAT,
     compare_detectors,
@@ -50,7 +50,9 @@ def run(data_dir: Path, out_dir: Path, seed: int, n_reference: int = 30) -> dict
     reference_ids, test_ids = ordered[:n_reference], ordered[n_reference:]
 
     config = MonitorConfig()
-    reference = fit_reference(m, reference_ids, config)
+    reference = fit_reference(
+        m, reference_ids, config, linked_signals=list(load_knowledge().linked_signals)
+    )
     result = monitor(m[m["batch_id"].isin(test_ids)], reference, config)
 
     test_outcomes = outcomes[outcomes["batch_id"].isin(test_ids)]

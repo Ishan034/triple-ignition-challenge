@@ -113,6 +113,7 @@ def build_reference(
     batch_ids,
     window_h: float = 1.0,
     control_loops: dict | None = None,
+    linked: dict | None = None,
 ) -> ReferenceProfile:
     """Phase I: estimate robust per-hour reference statistics from approved batches."""
     batch_ids = tuple(sorted(set(batch_ids)))
@@ -142,4 +143,7 @@ def build_reference(
     if control_loops:
         # {controlled variable: [controller output variable, output raises the variable]}
         params["control_loops"] = {c: [e, bool(r)] for c, (e, r) in sorted(control_loops.items())}
+    if linked:
+        # {"signals": [...], "scales": {signal: normal spread of its smoothed change}}
+        params["linked_shift"] = linked
     return ReferenceProfile(stats=stats, batch_ids=batch_ids, params=params)

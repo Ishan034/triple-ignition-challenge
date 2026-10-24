@@ -1,6 +1,6 @@
 {
-  "version": "82e84083dad6",
-  "created_at": "2026-10-23T19:09:47+00:00",
+  "version": "d2d5f3a5cf19",
+  "created_at": "2026-10-24T04:22:26+00:00",
   "batch_ids": [
     "E001",
     "E002",
@@ -247,7 +247,19 @@
     "E388"
   ],
   "params": {
-    "window_h": 1.0
+    "window_h": 1.0,
+    "linked_shift": {
+      "signals": [
+        "cer_efp",
+        "our_efp",
+        "dissolved_oxygen"
+      ],
+      "scales": {
+        "cer_efp": 0.5778645952640056,
+        "our_efp": 0.6319972176734825,
+        "dissolved_oxygen": 0.5916666666666668
+      }
+    }
   },
   "thresholds": {
     "robust_threshold": {
@@ -311,9 +323,9 @@
       "cer_efp": 1200.1173
     },
     "shift": {
-      "ph": 83.5127,
-      "temperature": 611.7315,
-      "dissolved_oxygen": 64.9047,
+      "ph": 122.3695,
+      "temperature": 997.2332,
+      "dissolved_oxygen": 201.3907,
       "biomass_od600": 5.0,
       "enzyme_activity": 5.0,
       "do2_mg_l": 5.0,
@@ -325,10 +337,30 @@
       "penicillin_offline": 5.0,
       "base_flow": 5.0,
       "coolant_flow": 5.0,
-      "ph_offline": 94.0696,
-      "agitation": 1356.0099,
-      "our_efp": 578.8578,
-      "cer_efp": 669.13
+      "ph_offline": 104.0372,
+      "agitation": 1485.7194,
+      "our_efp": 809.3795,
+      "cer_efp": 912.4869
+    },
+    "linked_shift": {
+      "ph": 4.0,
+      "temperature": 4.0,
+      "dissolved_oxygen": 4.0,
+      "biomass_od600": 4.0,
+      "enzyme_activity": 4.0,
+      "do2_mg_l": 4.0,
+      "our": 4.0,
+      "cer": 4.0,
+      "co2_offgas": 4.0,
+      "substrate": 4.0,
+      "biomass_offline": 4.0,
+      "penicillin_offline": 4.0,
+      "base_flow": 4.0,
+      "coolant_flow": 4.0,
+      "ph_offline": 4.0,
+      "agitation": 4.0,
+      "our_efp": 4.0,
+      "cer_efp": 21.9865
     },
     "loop_check": {
       "ph": 4.0,
@@ -352,12 +384,13 @@
     }
   },
   "calibration": {
-    "method": "leave-one-out over approved batches; limit = max(default, margin * quantile of per-batch peak |statistic|); robust-threshold and shift quantile chosen so at most 5% of approved batches would alert",
+    "method": "leave-one-out over approved batches; limit = max(default, margin * quantile of per-batch peak |statistic|); budgeted detectors' quantiles chosen so at most 5% of approved batches would alert (budget split equally between them)",
     "quantiles": {
       "robust_threshold": 0.99,
       "ewma": 1.0,
       "cusum": 1.0,
-      "shift": 0.99,
+      "shift": 1.0,
+      "linked_shift": 0.975,
       "loop_check": 1.0
     },
     "default_limits": {
@@ -365,6 +398,7 @@
       "ewma": 1.0,
       "cusum": 5.0,
       "shift": 5.0,
+      "linked_shift": 4.0,
       "loop_check": 4.0
     },
     "loo_max_statistic": {
@@ -448,6 +482,26 @@
         "our_efp": 735.7995,
         "cer_efp": 829.5335
       },
+      "linked_shift": {
+        "ph": 0.0,
+        "temperature": 0.0,
+        "dissolved_oxygen": 0.0,
+        "biomass_od600": 0.0,
+        "enzyme_activity": 0.0,
+        "do2_mg_l": 0.0,
+        "our": 0.0,
+        "cer": 0.0,
+        "co2_offgas": 0.0,
+        "substrate": 0.0,
+        "biomass_offline": 0.0,
+        "penicillin_offline": 0.0,
+        "base_flow": 0.0,
+        "coolant_flow": 0.0,
+        "ph_offline": 0.0,
+        "agitation": 0.0,
+        "our_efp": 0.0,
+        "cer_efp": 81.6319
+      },
       "loop_check": {
         "ph": 0.0,
         "temperature": 0.0,
@@ -471,9 +525,13 @@
     },
     "approved_batches_alerting": [
       "E112",
+      "E118",
       "E155",
+      "E160",
       "E207",
+      "E211",
       "E259",
+      "E301",
       "E374"
     ],
     "config": {
@@ -494,10 +552,11 @@
         "robust_threshold",
         "ewma",
         "cusum",
+        "linked_shift",
         "loop_check"
       ]
     },
-    "fingerprint": "3a8b9814489727be"
+    "fingerprint": "5a078ef785481fe2"
   },
   "stats": [
     {

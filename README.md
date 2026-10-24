@@ -67,7 +67,7 @@ The demo generates synthetic batches, validates them, fits a frozen reference on
 | `synthetic.py` | data | Synthetic batches: normal, slow growth, contamination, pH sensor spike, DO probe drift, missing-data gaps |
 | `ingest.py` | 1 · evidence acquisition | Loads CSVs; flags (never deletes) missing, suspect, duplicate and wrong-unit readings |
 | `reference.py` | 3 · reference memory | Robust per-hour reference (median, 1.4826·MAD), frozen and versioned |
-| `detectors.py` | 4 · anomaly detection | Robust z threshold, EWMA, two-sided CUSUM, control-loop check (a controlled variable drifting while its controller does not respond); optional shift-from-own-past detector |
+| `detectors.py` | 4 · anomaly detection | Robust z threshold, EWMA, two-sided CUSUM, linked-signal shift (two or more linked signals changing together from the batch's own past), control-loop check (a controlled variable drifting while its controller does not respond); optional single-signal shift detector |
 | `monitor.py` | 4 · anomaly detection | Leave-one-out limit calibration under a batch-level false-alarm budget; scoring; structured alerts; batch summary; `as_of_h` replay |
 | `alerts.py` | 4 · output | `Alert` object: evidence, persistence, corroboration, data-quality warnings, versions |
 | `diagnosis.py` | 5 · diagnostic reasoning, 3 · confidence/severity, 4 · next checks | Evidence items (present/absent/unknown), including controller-output evidence; transparent hypothesis ranking, safety rule, investigation reports |

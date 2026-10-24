@@ -27,20 +27,24 @@ results below come from **seeds 11–30**, which were not used for tuning.
 
 | Measure | Result |
 |---|---|
-| Contaminated batches flagged after onset | 120 / 120 |
+| Contaminated batches flagged after onset | 120 / 120 (97–100%) |
 | Non-contamination anomalies flagged (sensor spike, probe drift) | 120 / 120 |
-| "Normal"-category batches flagged (includes the 60 slow-growth batches) | 83 / 260 |
-| Median time from onset to first alert | ~7.6 h |
+| "Normal"-category batches flagged (includes the 60 slow-growth batches) | 81 / 260 (26–37%) |
+| Median time from onset to first alert | ~7.8 h |
 | Median lead time vs the simulated visual/odour note | 7.5 h (per-seed medians 5–9 h) |
-| False alerts per test batch | 2.0 |
+| False alerts per test batch | 2.3 |
 
-These use the current limit calibration (a 5% false-alarm budget, see below). With the
-earlier calibration (the single worst reference batch) the figures were 81 / 260, ~7.8 h,
-7.5 h and 1.9: on this simulated process the change makes almost no difference.
+These use the current detectors and calibration (a 5% false-alarm budget, see below,
+and the linked-signal detector on dissolved oxygen and pH). With the original
+calibration and detectors the figures were 81 / 260, ~7.8 h, 7.5 h and 1.9: on this
+simulated process the changes make almost no difference. False alerts per batch count
+alert episodes per detector, so a new detector adds to them even when no new batch is
+flagged.
 
 These synthetic figures overstate what to expect on a real plant: on IndPenSim's
-realistic batch-to-batch variation, a contaminant is caught reliably only once it changes
-respiration by about 40% (see `docs/external-validation.md`, section 5). A PCA benchmark
+realistic batch-to-batch variation, a contaminant that changes respiration by about 20%
+is caught in 27 of 30 batches, and one at 10% is missed (see
+`docs/external-validation.md`, sections 5 and 5b). A PCA benchmark
 on the same hourly signals matched our detectors here (120/120 at ~7.7 h).
 
 The simple robust threshold gives the earliest alerts. EWMA and CUSUM add little on these
@@ -73,21 +77,21 @@ explanation was strong enough to lead, so the scientist is asked to investigate 
 
 | Review time | Scenario | Batches | Matched | Unresolved | Wrong |
 |---|---|---|---|---|---|
-| at first alert | contamination | 120 | 6 | 109 | 5 |
+| at first alert | contamination | 120 | 10 | 105 | 5 |
 | | probe drift | 60 | 0 | 59 | 1 |
 | | sensor spike | 60 | 2 | 57 | 1 |
 | | slow growth | 60 | 0 | 60 | 0 |
-| first alert + 4 h | contamination | 120 | 80 | 37 | 3 |
+| first alert + 4 h | contamination | 120 | 81 | 36 | 3 |
 | | probe drift | 60 | 0 | 57 | 3 |
-| | sensor spike | 60 | 60 | 0 | 0 |
+| | sensor spike | 60 | 59 | 1 | 0 |
 | | slow growth | 60 | 0 | 59 | 1 |
-| first alert + 8 h | contamination | 120 | 115 | 3 | 2 |
+| first alert + 8 h | contamination | 120 | 115 | 4 | 1 |
 | | probe drift | 60 | 55 | 1 | 4 |
-| | sensor spike | 60 | 60 | 0 | 0 |
-| | slow growth | 60 | 11 | 48 | 1 |
+| | sensor spike | 60 | 59 | 1 | 0 |
+| | slow growth | 60 | 12 | 47 | 1 |
 | end of batch | contamination | 120 | 120 | 0 | 0 |
 | | probe drift | 60 | 57 | 1 | 2 |
-| | sensor spike | 60 | 60 | 0 | 0 |
+| | sensor spike | 60 | 59 | 1 | 0 |
 | | slow growth | 60 | 59 | 1 | 0 |
 
 **How to read it:**

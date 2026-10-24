@@ -115,3 +115,48 @@ def test_loop_check_flags_an_unanswered_drift_only():
     assert not [
         a for a in monitor(m[m["batch_id"] == "L12"], plain).alerts if a.detector == "loop_check"
     ]
+
+
+def _linked_campaign(seed=1):
+    """Two linked signals (DO and pH proxies) for 15 normal batches and one where both
+    change together from 40 h. Normal batches have their own offset and one-signal wobble."""
+    from contamination.schema import MEASUREMENT_COLUMNS
+
+    rng = np.random.default_rng(seed)
+    rows, t0 = [], pd.Timestamp("2026-02-01")
+    for i in range(16):
+        b, start = f"K{i:02d}", t0 + pd.Timedelta(days=3 * i)
+        offset_do, offset_ph = rng.normal(0, 5), rng.normal(0, 0.05)
+        wobble = rng.integers(20, 60)
+        for h in range(80):
+            do = 60 + offset_do + rng.normal(0, 1)
+            ph = 6.8 + offset_ph + rng.normal(0, 0.01)
+            if i < 15 and wobble <= h < wobble + 10:  # one signal wobbles alone
+                do -= 4
+            if i == 15 and h >= 40:  # both change together, and keep changing
+                do -= 0.4 * (h - 39)
+                ph -= 0.004 * (h - 39)
+            ts = start + pd.Timedelta(hours=h)
+            rows += [
+                (b, ts, ts, "dissolved_oxygen", do, "%sat"),
+                (b, ts, ts, "ph", ph, "pH"),
+            ]
+    m = pd.DataFrame(
+        rows, columns=["batch_id", "timestamp", "available_at", "variable", "value", "unit"]
+    )
+    m["stage"], m["source"], m["quality_flag"], m["observation"] = None, "test", "valid", None
+    return m[MEASUREMENT_COLUMNS]
+
+
+def test_linked_shift_needs_two_signals_together():
+    from contamination.ingest import validate_measurements
+    from contamination.monitor import fit_reference, monitor
+
+    m = validate_measurements(_linked_campaign()).measurements
+    normal = [f"K{i:02d}" for i in range(15)]
+    ref = fit_reference(m, normal, linked_signals=["dissolved_oxygen", "ph"])
+    assert set(ref.params["linked_shift"]["scales"]) == {"dissolved_oxygen", "ph"}
+    alerts = monitor(m[m["batch_id"] == "K15"], ref).alerts
+    linked = [a for a in alerts if a.detector == "linked_shift"]
+    assert linked and min(a.start_h for a in linked) >= 40
+    assert "dissolved_oxygen" in linked[0].detail and "ph" in linked[0].detail

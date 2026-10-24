@@ -101,22 +101,26 @@ as the outcome.
 **Split.** Chronological: the earliest 243 batches formed the reference, and the later
 163 were monitored.
 
-| Measure | Result |
-|---|---|
-| Logger artefacts flagged by ingestion (−1 / 9999 sentinels, capped OUR/CER) | 2,016 readings, none deleted |
-| Later batches flagged for review | **14 / 163 (9%)**, almost all on temperature |
-| Flagged among low-potency batches (below the reference's 10th percentile) | **8 / 48 (17%)** |
-| Flagged among the rest | 6 / 115 (5%) |
-| Median final potency: flagged vs not flagged | 10,434 vs 10,848 |
-| Is the association chance? | Fisher p = 0.02 (odds ratio 3.6); Mann-Whitney p = 0.001 |
+| Measure | Without the linked-signal detector | With it (current default) |
+|---|---|---|
+| Logger artefacts flagged by ingestion (−1 / 9999 sentinels, capped OUR/CER) | 2,016 readings, none deleted | same |
+| Later batches flagged for review | **14 / 163 (9%)**, almost all on temperature | **26 / 163 (16%)** |
+| Flagged among low-potency batches (below the reference's 10th percentile) | **8 / 48 (17%)** | 10 / 48 (21%) |
+| Flagged among the rest | 6 / 115 (5%) | 16 / 115 (14%) |
+| Median final potency: flagged vs not flagged | 10,434 vs 10,848 | 10,690 vs 10,850 |
+| Is the association chance? | Fisher p = 0.02 (odds ratio 3.6); Mann-Whitney p = 0.001 | Fisher p = 0.19; Mann-Whitney p = 0.04 |
+| Batches called contamination | 0 | 0 |
 
 **Reading it.**
 
-- **On genuine plant data, the batches the system flags really did turn out worse.** This
-  is our first real-data evidence that its flags point at meaningful deviations. It's
-  modest: only 14 flagged batches.
-- **Diagnoses stayed cautious.** 13 of 14 led with "process-condition change", none with
-  contamination.
+- **On genuine plant data, the batches the system flags turned out worse.** With the
+  original detectors the association was clear (14 flagged batches). The linked-signal
+  detector (section 5b), added to catch contamination earlier, also flags 12 batches whose
+  respiration changed mid-run without hurting potency, so the association weakens
+  (flagged batches still have lower potency, p = 0.04). On a plant, those are reviews
+  that find a process change rather than a quality problem.
+- **Diagnoses stayed cautious.** Flagged batches led with "process-condition change" or
+  "unresolved"; none with contamination.
 - **The limits came out very wide on real data** (robust z ≈ 53, CUSUM ≈ 2,700), so only
   gross deviations alert, and DO and pH never did. Calibration takes the single worst of
   243 reference batches, and real plant data always has a few outliers. Tightening them
@@ -154,7 +158,8 @@ IndPenSim figures in the first two rows come from runs before the controller out
 - **It is not predictable when the process drifts.** On the erythromycin plant the
   later batches drifted from the earlier ones (potency fell over the year), so a 10%
   budget gave 33% flagged. A frozen reference must be reviewed and refreshed.
-- **The default is a 5% budget.** It never did worse than the old default on any dataset,
+- **The default is a 5% budget**, now split equally between the single-reading threshold
+  and the linked-signal detector. It never did worse than the old default on any dataset,
   and it is a number MaverickX can set themselves ("how many normal batches in 100 can we
   afford to review?"). Catching the base-flow faults needs about 10%.
 
@@ -164,7 +169,8 @@ Reviewers will ask. `python -m contamination.multivariate` fits PCA with Hotelli
 and SPE (the textbook multivariate monitoring method) on the same hourly z-scores,
 calibrated by cross-validation under the same 5% false-alarm budget. Offline assays are
 left out (PCA needs a complete row every hour), and our detectors are scored on the same
-hourly signals. **Comparison only**: the project keeps the simple detectors.
+hourly signals. **Comparison only**: the project keeps the simple detectors. Our
+figures here are from before the linked-signal detector (section 5b) was added.
 
 | Dataset | Method | Normal batches flagged | Problem batches caught | Onset to alert |
 |---|---|---|---|---|
@@ -190,39 +196,78 @@ lab results with a 4 h delay are IndPenSim's. The reference is fitted on untouch
 batches only. At strength 1 the contaminant raises CO₂ output and oxygen uptake by 20%
 and lowers dissolved oxygen by 25%; other strengths scale these.
 
-| Contaminant strength | Contaminated batches caught | Onset to first alert | Named as contamination (leading explanation) | Onset to named |
-|---|---|---|---|---|
-| ½ (+10% respiration) | 1/30 (1–17%) | – | 0/30 | – |
-| 1 (+20%) | 5/30 (7–34%) | 49 h | 2/30 | 33 h |
-| 2 (+40%) | **28/30 (79–98%)** | **16 h** | **28/30** | **26 h** |
-| 4 (+80%) | **30/30 (89–100%)** | **11 h** | **30/30** | **20 h** |
+| Contaminant strength | Caught: original detectors | Caught: with linked-signal detector (default) | Onset to first alert (with) | Named as contamination (with) | Onset to named (with) |
+|---|---|---|---|---|---|
+| ½ (+10% respiration) | 1/30 (1–17%) | 1/30 (1–17%) | – | 0/30 | – |
+| 1 (+20%) | 5/30 (7–34%), 49 h | **27/30 (74–97%)** | **19 h** | 4/30 | 34 h |
+| 2 (+40%) | 28/30 (79–98%), 16 h | **30/30 (89–100%)** | **13 h** | **29/30** | **26 h** |
+| 4 (+80%) | 30/30 (89–100%), 11 h | **30/30 (89–100%)** | **11 h** | **30/30** | **21.5 h** |
 
-The unmodified copies of the same batches: 1/30 flagged, 0/30 named contamination.
+The unmodified copies of the same batches: 1/30 flagged, 0/30 named contamination, with
+or without the linked-signal detector.
 
 **Reading it.**
 
-- **There is a detection threshold.** On realistic industrial variation, a contaminant
-  that changes respiration by 20% or less is mostly invisible; at 40% or more it is
-  caught within about 16 h and correctly named as contamination within about a day.
-  The 120/120 on our own simulator reflected a process with much less batch-to-batch
-  variation, not a general capability.
-- **When it is caught, the diagnosis is right.** At strengths 2 and 4, contamination
-  became the leading explanation in 58 of 60 batches, using rules written for a
-  different process (α-amylase), and no normal batch was called contamination.
-- **The first sign is almost always CO₂ output (CER):** 58 of the 64 detected batches.
-  Off-gas analysis is the most valuable signal to ask MaverickX for.
-- **What would lower the threshold:** less batch-to-batch variation in MaverickX's own
-  process than in IndPenSim's three control strategies, more frequent biomass/OD
-  readings than every 12 h, a reference per product/recipe, and the optional shift
-  detector (section 6) once its false alarms are acceptable. Only MaverickX's data can
-  say where their threshold lies.
+- **There is a detection threshold, and section 5b lowered it.** With the original
+  detectors, a contaminant that changes respiration by 20% or less was mostly invisible on
+  realistic industrial variation. Requiring linked signals to change together catches
+  27 of 30 at +20%, within about 19 h, with no extra false alarms on these batches. Below
+  about +10% it is still invisible. The 120/120 on our own simulator reflected a process
+  with much less batch-to-batch variation, not a general capability.
+- **At +20% the alert usually comes without a name.** The model raises the alert but
+  leaves the explanation "unresolved" (4/30 named contamination), because the confirming
+  evidence, extra biomass, comes from a lab assay every 12 h. That is the intended safe
+  behaviour: the recommended checks include a contamination test.
+- **When the evidence is there, the diagnosis is right.** At strengths 2 and 4,
+  contamination became the leading explanation in 59 of 60 batches, using rules written
+  for a different process (α-amylase), and no normal batch was called contamination.
+- **The first sign is almost always CO₂ output (CER).** Off-gas analysis is the most
+  valuable signal to ask MaverickX for, followed by more frequent biomass/OD readings.
+- **What we tried that did not help:** a separate reference per control strategy caught
+  about the same as a pooled reference with an equally loose false-alarm budget (12/30
+  vs 11/30 at +20%, both with 4/30 false alarms), so it was not adopted. MaverickX
+  products that differ a lot can be monitored as separate campaigns.
 
+## 5b. The linked-signal detector
+
+A contaminant changes several physically linked signals at once: more oxygen uptake,
+more CO₂, lower dissolved oxygen. Ordinary batch-to-batch differences are mostly
+*persistent offsets* (a batch runs a little high all the way through), and ordinary
+mid-batch wobble usually moves *one* signal. The linked-shift detector therefore:
+
+1. compares each hourly reading with the same batch's own recent past (the median of
+   the 24 h ending 12 h earlier), so a persistent offset cancels;
+2. averages that change over 6 h and scales it by its normal spread;
+3. takes the **second-largest** change across the linked group, so it only rises when at
+   least two linked signals change together.
+
+The linked group is set per process: CO₂ output, oxygen uptake and dissolved oxygen for
+IndPenSim (off-gas CO₂ was left out because it measures the same thing as CO₂ output),
+the same three for the erythromycin plant, and dissolved oxygen and pH for the synthetic
+α-amylase process. Its limit is calibrated leave-one-out like the others, and the
+false-alarm budget is split equally between it and the single-reading threshold. It
+reports which signals moved, and counts as "several signals deviate together" in the
+diagnosis, never on its own as contamination.
+
+| Dataset | Without | With (default) |
+|---|---|---|
+| Semi-synthetic contamination, +20% | 5/30 caught | **27/30 caught** |
+| IndPenSim faults / normal batches flagged | 10/10, 1/30 | 10/10, 1/30 |
+| Synthetic tuning seeds: normal-category flagged | 43/130 | 41/130 |
+| Erythromycin plant: later batches flagged | 14/163 (9%) | 26/163 (16%) |
+
+The cost is on the real plant: more reviews of batches whose respiration genuinely
+changed without a quality problem. Developed while looking at the semi-synthetic test,
+so its numbers there are not unseen; the erythromycin and synthetic figures were not
+used to design it.
 
 ## 6. Optional: comparing each batch with its own past
 
 A natural fix for batch-to-batch offsets is to compare each reading with the same batch's
 recent past, so a persistent offset cancels and a change partway through stands out.
-This "shift" detector is implemented but **off by default**:
+This single-signal "shift" detector is implemented but **off by default** (the
+linked-signal detector in section 5b is the version that is on). Figures below are
+without the linked-signal detector:
 
 | Dataset | Without shift | With shift |
 |---|---|---|
@@ -255,11 +300,11 @@ normal. The potency drift noted above is not visible in the monitored signals.
   method (PCA) did no better.
 - We still cannot say anything about **contamination** detection on real data. That
   needs MaverickX's batch records with confirmed contamination cases. On realistic
-  simulated variation, a contaminant is caught reliably once it changes respiration by
-  about 40% or more, and missed at 20% or less (section 5).
+  simulated variation, a contaminant that changes respiration by about 20% is caught in
+  27 of 30 batches within about 19 h, and one at 10% is missed (sections 5 and 5b).
 - Done since the first run: limits set by a false-alarm budget; controller outputs
-  monitored; a control-loop check; an "equipment or actuator fault" explanation in the
-  rule book; a PCA benchmark; the semi-synthetic contamination test; 95% ranges on every
-  count; a reference refresh workflow.
+  monitored; a control-loop check; a linked-signal detector; an "equipment or actuator
+  fault" explanation in the rule book; a PCA benchmark; the semi-synthetic contamination
+  test; 95% ranges on every count; a reference refresh workflow.
 - The data request now asks MaverickX for controller outputs (pump and valve demands) and
   for their acceptable false-alarm rate.

@@ -9,4 +9,5 @@ roles:
   ph: ph
   product: not_measured
   temperature: temperature
+linked_signals: [cer_efp, our_efp, dissolved_oxygen]
 parameters: {}

@@ -1,6 +1,6 @@
 {
-  "version": "da11353c6bd1",
-  "created_at": "2026-10-23T19:09:57+00:00",
+  "version": "49b9850ac941",
+  "created_at": "2026-10-24T04:22:28+00:00",
   "batch_ids": [
     "B001",
     "B002",
@@ -34,7 +34,17 @@
     "B030"
   ],
   "params": {
-    "window_h": 1.0
+    "window_h": 1.0,
+    "linked_shift": {
+      "signals": [
+        "dissolved_oxygen",
+        "ph"
+      ],
+      "scales": {
+        "dissolved_oxygen": 0.8788646516989045,
+        "ph": 0.6367434683520008
+      }
+    }
   },
   "thresholds": {
     "robust_threshold": {
@@ -98,11 +108,11 @@
       "cer_efp": 5.0
     },
     "shift": {
-      "ph": 17.8559,
-      "temperature": 7.3214,
-      "dissolved_oxygen": 75.7476,
-      "biomass_od600": 20.39,
-      "enzyme_activity": 10.0129,
+      "ph": 18.0199,
+      "temperature": 7.4404,
+      "dissolved_oxygen": 80.7539,
+      "biomass_od600": 20.9552,
+      "enzyme_activity": 10.5087,
       "do2_mg_l": 5.0,
       "our": 5.0,
       "cer": 5.0,
@@ -116,6 +126,26 @@
       "agitation": 5.0,
       "our_efp": 5.0,
       "cer_efp": 5.0
+    },
+    "linked_shift": {
+      "ph": 4.0,
+      "temperature": 4.0,
+      "dissolved_oxygen": 4.0,
+      "biomass_od600": 4.0,
+      "enzyme_activity": 4.0,
+      "do2_mg_l": 4.0,
+      "our": 4.0,
+      "cer": 4.0,
+      "co2_offgas": 4.0,
+      "substrate": 4.0,
+      "biomass_offline": 4.0,
+      "penicillin_offline": 4.0,
+      "base_flow": 4.0,
+      "coolant_flow": 4.0,
+      "ph_offline": 4.0,
+      "agitation": 4.0,
+      "our_efp": 4.0,
+      "cer_efp": 4.0
     },
     "loop_check": {
       "ph": 4.0,
@@ -139,12 +169,13 @@
     }
   },
   "calibration": {
-    "method": "leave-one-out over approved batches; limit = max(default, margin * quantile of per-batch peak |statistic|); robust-threshold and shift quantile chosen so at most 5% of approved batches would alert",
+    "method": "leave-one-out over approved batches; limit = max(default, margin * quantile of per-batch peak |statistic|); budgeted detectors' quantiles chosen so at most 5% of approved batches would alert (budget split equally between them)",
     "quantiles": {
       "robust_threshold": 0.995,
       "ewma": 1.0,
       "cusum": 1.0,
-      "shift": 0.995,
+      "shift": 1.0,
+      "linked_shift": 0.8,
       "loop_check": 1.0
     },
     "default_limits": {
@@ -152,6 +183,7 @@
       "ewma": 1.0,
       "cusum": 5.0,
       "shift": 5.0,
+      "linked_shift": 4.0,
       "loop_check": 4.0
     },
     "loo_max_statistic": {
@@ -235,6 +267,26 @@
         "our_efp": 0.0,
         "cer_efp": 0.0
       },
+      "linked_shift": {
+        "ph": 0.0,
+        "temperature": 0.0,
+        "dissolved_oxygen": 2.9065,
+        "biomass_od600": 0.0,
+        "enzyme_activity": 0.0,
+        "do2_mg_l": 0.0,
+        "our": 0.0,
+        "cer": 0.0,
+        "co2_offgas": 0.0,
+        "substrate": 0.0,
+        "biomass_offline": 0.0,
+        "penicillin_offline": 0.0,
+        "base_flow": 0.0,
+        "coolant_flow": 0.0,
+        "ph_offline": 0.0,
+        "agitation": 0.0,
+        "our_efp": 0.0,
+        "cer_efp": 0.0
+      },
       "loop_check": {
         "ph": 0.0,
         "temperature": 0.0,
@@ -275,10 +327,11 @@
         "robust_threshold",
         "ewma",
         "cusum",
+        "linked_shift",
         "loop_check"
       ]
     },
-    "fingerprint": "bc3fdb76cf07916b"
+    "fingerprint": "68649c00825ce430"
   },
   "stats": [
     {

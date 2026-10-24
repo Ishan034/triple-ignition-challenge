@@ -190,6 +190,7 @@ def run_indpensim(campaign_dir: Path = Path("data/indpensim")):
 
 
 def run_synthetic(seeds) -> tuple[pd.DataFrame, list[dict]]:
+    from .diagnosis import load_knowledge
     from .ingest import validate_measurements
     from .monitor import fit_reference, monitor
     from .synthetic import generate_dataset
@@ -201,7 +202,7 @@ def run_synthetic(seeds) -> tuple[pd.DataFrame, list[dict]]:
         m = validate_measurements(ds.measurements).measurements
         ordered = ds.batches.sort_values("start_time")["batch_id"].tolist()
         ref_ids, test_ids = ordered[:30], ordered[30:]
-        reference = fit_reference(m, ref_ids)
+        reference = fit_reference(m, ref_ids, linked_signals=list(load_knowledge().linked_signals))
         alerts = monitor(m[m["batch_id"].isin(test_ids)], reference).alerts
         outcomes = ds.outcomes[ds.outcomes["batch_id"].isin(test_ids)]
         df, info = compare(m, ref_ids, test_ids, outcomes, variables, alerts, DEFAULT_CONFIG)

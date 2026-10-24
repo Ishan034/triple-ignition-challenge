@@ -16,6 +16,11 @@ statistic. An alert is raised where ``|statistic| > limit``.
   strategy); that offset cancels in ``d``, so a change that starts partway through a
   batch, such as a contaminant taking hold, stands out. The 12 h lag keeps a slowly
   growing change out of its own baseline.
+* ``linked_shift``: the same change-from-own-past, smoothed over 6 readings and scaled
+  by its normal spread, for a group of physically linked signals (e.g. CO2 output,
+  oxygen uptake, dissolved oxygen). The statistic is the *second-largest* change in the
+  group, so it only rises when at least two linked signals change together, which
+  ordinary mid-batch wobble in one signal does not do. Computed in ``monitor.score``.
 * ``loop_check``: for a controlled variable (pH, temperature) whose controller output
   is recorded, the robust z of the variable at readings where the controller is *not*
   pushing back (its output's z in the correcting direction is below a small margin),
@@ -33,7 +38,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-ALGORITHM_VERSION = "0.3.0"
+ALGORITHM_VERSION = "0.4.0"
 
 
 @dataclass(frozen=True)
@@ -49,6 +54,9 @@ DETECTORS: dict[str, DetectorSpec] = {
     "ewma": DetectorSpec("ewma", "Sustained shift in the smoothed (EWMA) deviation"),
     "cusum": DetectorSpec("cusum", "Accumulated persistent deviation (two-sided CUSUM)"),
     "shift": DetectorSpec("shift", "Change from the batch's own recent past (CUSUM)"),
+    "linked_shift": DetectorSpec(
+        "linked_shift", "At least two linked signals changed together from the batch's own past"
+    ),
     "loop_check": DetectorSpec(
         "loop_check", "Controlled variable off its reference while its controller does not respond"
     ),
@@ -132,5 +140,6 @@ def default_limits(ewma_lambda: float, ewma_L: float, robust_limit: float, cusum
         "ewma": ewma_limit(ewma_L, ewma_lambda),
         "cusum": cusum_h,
         "shift": cusum_h,
+        "linked_shift": robust_limit,
         "loop_check": robust_limit,
     }

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .diagnosis import diagnose
+from .diagnosis import diagnose, load_knowledge
 from .evaluate import (
     SYNTHETIC_CAVEAT,
     evaluate,
@@ -43,7 +43,9 @@ def run_seed(
     ds = generate_dataset(seed=seed, n_reference=n_reference)
     m = validate_measurements(ds.measurements).measurements
     ordered = ds.batches.sort_values("start_time")["batch_id"].tolist()
-    reference = fit_reference(m, ordered[:n_reference], config)
+    reference = fit_reference(
+        m, ordered[:n_reference], config, linked_signals=list(load_knowledge().linked_signals)
+    )
     test = m[m["batch_id"].isin(ordered[n_reference:])]
     outcomes = ds.outcomes[ds.outcomes["batch_id"].isin(ordered[n_reference:])]
 

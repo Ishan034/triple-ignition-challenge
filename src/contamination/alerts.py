@@ -38,6 +38,7 @@ class Alert:
     reference_version: str
     corroborating_variables: list[str] = field(default_factory=list)
     data_quality_warnings: list[str] = field(default_factory=list)
+    detail: str = ""  # e.g. which linked signals moved together
     contamination_confirmed: bool = False
     interpretation: str = INTERPRETATION
 

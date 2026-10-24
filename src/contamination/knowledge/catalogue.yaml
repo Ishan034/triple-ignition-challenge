@@ -28,6 +28,11 @@ roles:
   ph_control: not_measured           # e.g. base / acid pump output
   temperature_control: not_measured  # e.g. cooling-water flow or valve position
 
+# Linked-shift detector: physically linked signals measured often enough (hourly) whose
+# changes from the batch's own past are compared; an alert needs two to move together.
+# Entries are roles (mapped to this process's variables) or variable names.
+linked_signals: [oxygen, ph]
+
 # Control loops: which controller output holds which variable, and whether raising
 # the output raises the variable (more base raises pH; more cooling lowers temperature).
 control_loops:
