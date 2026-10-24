@@ -17,6 +17,8 @@ The system investigates contamination; it does not predict future contamination 
 
 The MVP works end to end on **synthetic** α-amylase fermentation data with simulated bacterial (*E. coli*) contamination: anomaly detection, diagnosis, source tracing and an investigation dashboard. It has also been evaluated on external data: the IndPenSim industrial penicillin simulation (100 batches, labelled equipment faults) and 406 real erythromycin plant batches. See [`docs/external-validation.md`](docs/external-validation.md). Real MaverickX batch data has been requested. Synthetic results and design decisions are in [`docs/mvp-results.md`](docs/mvp-results.md). Deadline: 28 October 2026.
 
+**Documents:** [`docs/technical-document.pdf`](docs/technical-document.pdf) explains the whole system (frameworks, data processing, algorithms, calibration, diagnosis, tracing, evaluation and the dashboard); [`docs/Contamination-Model-Team-Update.pdf`](docs/Contamination-Model-Team-Update.pdf) is the short team update.
+
 ## Investigation dashboard
 
 ```bash
