@@ -1,18 +1,1 @@
-# Process profile: IndPenSim 100,000 L fed-batch penicillin simulation
-# (Goldrick et al. 2015, J. Biotechnol. 193:70-82; data CC BY 4.0).
-# Maps the shared rule book's roles to IndPenSim variables and adjusts parameters
-# for a ~230 h fed-batch with 12-hourly offline assays. Draft, like the rule book.
-name: IndPenSim penicillin (simulated)
-roles:
-  biomass: biomass_offline      # offline assay, every 12 h, ~4 h delay
-  oxygen: do2_mg_l
-  ph: ph
-  product: penicillin_offline   # offline assay, every 12 h, ~4 h delay
-  temperature: temperature
-  ph_control: base_flow         # base pump flow (pH loop output)
-  temperature_control: coolant_flow  # cooling-water flow (temperature loop output)
-linked_signals: [cer, our, do2_mg_l]  # respiration: CO2 out, O2 uptake, DO (off-gas CO2 duplicates CER)
-parameters:
-  product_phase_min_activity: 2.0   # g/L penicillin before product comparisons apply
-  shift_search_h: [-12, 24]         # longer process, so larger timing shifts are plausible
-  shift_min_h: 6
+use: indpensim

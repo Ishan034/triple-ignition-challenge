@@ -97,7 +97,9 @@ def load_knowledge(
 
     A profile is a small YAML file (``knowledge/profiles/<name>.yaml``, or a path) with
     ``roles`` (replacing the role -> variable map) and ``parameters`` (overriding single
-    parameters). Hypotheses, evidence links and checks are shared across processes.
+    parameters). Hypotheses, evidence links and checks are shared across processes. A
+    campaign's ``profile.yaml`` may instead say ``use: <name>`` to follow a packaged
+    profile, so it stays current when the packaged one changes.
     """
     d = yaml.safe_load(Path(path).read_text())
     if profile is not None:
@@ -105,6 +107,9 @@ def load_knowledge(
         if not ppath.exists():
             ppath = PROFILES_DIR / f"{profile}.yaml"
         prof = yaml.safe_load(ppath.read_text())
+        if set(prof) == {"use"}:
+            ppath = PROFILES_DIR / f"{prof['use']}.yaml"
+            prof = yaml.safe_load(ppath.read_text())
         d["roles"] = prof.get("roles", d.get("roles", {}))
         if "linked_signals" in prof:
             d["linked_signals"] = prof["linked_signals"]

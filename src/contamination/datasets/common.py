@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pandas as pd
@@ -33,6 +32,10 @@ def write_campaign(
             )
         else:
             df.to_csv(out_dir / f"{name}.csv", index=False)
-    shutil.copy(PROFILES_DIR / f"{profile}.yaml", out_dir / "profile.yaml")
+    # Point at the packaged profile rather than copying it, so the campaign follows
+    # later changes to the rule book's process settings.
+    if not (PROFILES_DIR / f"{profile}.yaml").exists():
+        raise ValueError(f"no packaged profile {profile!r}")
+    (out_dir / "profile.yaml").write_text(f"use: {profile}\n")
     (out_dir / REFERENCE_LIST).write_text("\n".join(reference_ids) + "\n")
     (out_dir / "README.md").write_text(readme)

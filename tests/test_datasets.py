@@ -67,3 +67,12 @@ def test_erythromycin_convert_keeps_elapsed_hours(tmp_path):
     assert (
         m.loc[(m["variable"] == "dissolved_oxygen") & (m["value"] < 0), "quality_flag"] == "suspect"
     ).all()
+
+
+def test_campaign_profile_can_follow_a_packaged_profile(tmp_path):
+    from contamination.diagnosis import load_knowledge
+
+    (tmp_path / "profile.yaml").write_text("use: indpensim\n")
+    kb = load_knowledge(profile=tmp_path / "profile.yaml")
+    assert kb.roles["biomass"] == "biomass_offline"
+    assert "cer" in kb.linked_signals and "indpensim" in kb.review_status.lower()
