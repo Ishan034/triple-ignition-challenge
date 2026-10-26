@@ -26,20 +26,19 @@ python -m contamination.demo        # once, to generate data/synthetic/
 streamlit run app/dashboard.py      # opens http://localhost:8501
 ```
 
-- **Campaign overview**: every monitored batch with its status, process deviation, leading explanation, contamination evidence and affected scope.
-- **Batch investigation**: signal timelines against the reference band with alerts; a **replay** slider that shows what the system knew at any hour; ranked explanations, evidence, next checks and possible sources; a form to **record check results** (the assessment updates immediately); a downloadable report.
-- **Batch investigation** also shows **how the assessment developed** (the batch replayed hour by hour: when the first alert came and when each explanation first led) and takes **alert feedback** (real issue / false alarm / not sure), downloadable for re-tuning.
+- **Campaign overview**: a banner saying how many batches need attention, the batches to act on now (contamination suspected or confirmed, with their next check), batches **at risk** because they used a resource source tracing ranks as a lead, and a colour-coded review queue (act now / review / at risk / no action; an order for review, not a probability). **Quick actions** open a batch, request its next check, escalate it, or flag all at-risk batches; an actions log tracks what is open and done.
+- **Batch investigation** has three tabs. **Summary**: leading explanation, contamination evidence, process deviation and confidence (kept separate), the next check, what changed, and the signal timelines against the reference band. **Evidence**: ranked explanations, evidence items, alerts, possible sources, **how the assessment developed** (replayed hour by hour) and the full report. **Actions**: request a check, **record a check result** (the assessment updates immediately), **alert feedback** (real issue / false alarm / not sure), flag batches at risk through the same source, and **escalate** (a plain-text summary to copy or download; nothing is sent from the dashboard). A **replay** slider shows what the system knew at any hour.
 - **Detection timing**: for batches with a known onset, hours from onset to the first alert and the lead over today's method, beside the false-alarm rate.
 - **Source tracing**: a genealogy graph of contamination cases and the resources linking them, clusters, and the full candidate table.
-- **Value estimate**: a yearly estimate from the plant's own figures (batches, loss rate, batch cost, test cost); the system only contributes the measured lead time and false-alarm rate. Pre-filled values are placeholders.
-- **Load your data**: upload plant exports plus a `mapping.yaml`, convert, see the readiness report, and monitor them. The [data template](docs/data-template/) shows the format.
+- **Value estimate**: a yearly estimate from the plant's own figures (batches, loss rate, batch cost, test cost); the system only contributes the measured lead time and false-alarm rate. Pre-filled from demo placeholders or the MaverickX draft profile, which lists every number MaverickX has not confirmed yet.
+- **Load your data**: a **guided column mapper**: upload the exports, and each file's role (online signals, lab results, batch records, outcomes, operator notes), each column and each test name gets a suggested meaning to confirm or change, with new variables defined in the table. No YAML needed; the resulting `mapping.yaml` can be downloaded for reuse. Then convert, see the readiness report, and monitor. Uploading a hand-written `mapping.yaml` still works. The [data template](docs/data-template/) shows example exports.
 - **How it works**: a plain-language explanation and the system's limits.
 
 Pick the dataset in the sidebar: the **synthetic demo**, **IndPenSim** (100 simulated industrial penicillin batches with labelled equipment faults, `data/indpensim/`) or the **erythromycin plant** (406 real batches without labels, `data/erythromycin/`). Both external datasets are CC BY 4.0 and ship as converted campaign folders, so nothing needs downloading; each folder's `reference_batches.txt` lists the batches approved as normal (the same split as the evaluation), and `reference_profile.json` caches the fitted reference. Data loaded through **Load your data** appears in the list too (it is kept out of git).
 
 A "Show known outcomes" toggle shows the answers for evaluation (simulated truth, fault labels, or final potency). The model never sees them.
 
-A **false-alarm budget** slider (1–20%, default 5%) sets how tight the alert limits are: at most that share of the approved normal batches would have alerted. A new setting recalibrates once and is cached. **Check results and alert feedback are saved** per dataset in `data/records/` (kept out of git) and reloaded next time; the sidebar's *Saved records* panel downloads them and restores them from a downloaded file (needed on Streamlit Cloud, whose disk is wiped when the app restarts).
+A **false-alarm budget** slider (1–20%, default 5%) sets how tight the alert limits are: at most that share of the approved normal batches would have alerted. A new setting recalibrates once and is cached. **Check results, alert feedback and actions are saved** per dataset in `data/records/` (kept out of git) and reloaded next time; the sidebar's *Saved records* panel downloads them and restores them from a downloaded file (needed on Streamlit Cloud, whose disk is wiped when the app restarts).
 
 ### Deploying (Streamlit Community Cloud)
 
@@ -52,7 +51,7 @@ python -m contamination.importer convert path/to/mapping.yaml --out data/maveric
 python -m contamination.importer readiness data/maverickx/campaign
 ```
 
-`docs/data-template/` has example exports in common plant layouts and an annotated `mapping.yaml`. The readiness report says which process roles are measured, how many approved normal batches and confirmed contamination cases there are, whether result times and genealogy are recorded, and what is missing.
+`docs/data-template/` has example exports in common plant layouts and an annotated `mapping.yaml`. The dashboard's *Load your data* page builds the same mapping interactively. The **MaverickX profile** (`knowledge/profiles/maverickx.yaml`, `use: maverickx`) is a draft: it maps the rule book's roles, lists the export names we expect, and holds value-estimate defaults, each marked with its source and *not confirmed* until MaverickX gives the number. The readiness report says which process roles are measured, how many approved normal batches and confirmed contamination cases there are, whether result times and genealogy are recorded, and what is missing.
 
 ## Running the demo
 
@@ -78,9 +77,11 @@ The demo generates synthetic batches, validates them, fits a frozen reference on
 | `knowledge/catalogue.yaml` | 5 · knowledge base | Hypotheses, evidence matrix, weights, checks: a **draft** for scientist review |
 | `tracing.py` | 2 · source tracing | Batch genealogy graph (NetworkX); candidate sources ranked by over-representation (Fisher's exact test, Bonferroni, confounding check); clusters; affected scope |
 | `datasets/indpensim.py`, `datasets/erythromycin.py` | external data | Download and convert external datasets into campaign folders; evaluate on them |
-| `importer.py` | 1 · evidence acquisition | Convert a plant's own exports (any layout, described by `mapping.yaml`) into a campaign; readiness report |
+| `importer.py` | 1 · evidence acquisition | Convert a plant's own exports (any layout, described by `mapping.yaml` or the dashboard's column mapper) into a campaign; column and outcome suggestions; readiness report |
 | `value.py` | decision support | Yearly value estimate from the plant's own figures |
-| `records.py` | decision support | Check results and alert feedback recorded in the dashboard, saved per campaign |
+| `records.py` | decision support | Check results, alert feedback and actions (check requested, flagged at risk, escalated) recorded in the dashboard, saved per campaign |
+| `triage.py` | decision support | Review priority per batch (act now / review / at risk / no action), batches at risk through a lead resource, escalation summary |
+| `plant.py` | decision support | A profile's plant section: wording, expected export names, value-estimate defaults with source and confirmation status |
 | `knowledge/profiles/*.yaml` | 5 · knowledge base | Process profiles mapping the rule book's roles (biomass, oxygen, pH, product, temperature) to each process's variables |
 | `robustness.py` | validation | Multi-seed evaluation of detection and diagnosis |
 | `multivariate.py` | validation | PCA (Hotelling T² / SPE) benchmark under the same false-alarm budget: comparison only |

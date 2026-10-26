@@ -1,0 +1,48 @@
+# Process profile: MaverickX enzyme production. DRAFT, TO CONFIRM WITH MAVERICKX.
+#
+# Known from the discovery call (docs/project-context.md): enzyme production in a small
+# facility; contamination is noticed today by smell, pigment and colour changes and the
+# scientists' experience; confirmatory analysis (HPLC) is outsourced and takes days.
+# Everything else below is a starting assumption marked "to confirm": the production
+# organism, the signals recorded, their export names, units and all costs.
+name: MaverickX enzyme production (draft, to confirm)
+status: draft - roles, export names and costs not yet confirmed by MaverickX
+roles:  # same roles as the shared rule book; variable names to confirm against their exports
+  biomass: biomass_od600
+  oxygen: dissolved_oxygen
+  ph: ph
+  product: enzyme_activity
+  temperature: temperature
+  ph_control: not_measured           # to confirm: is base / acid pump output logged?
+  temperature_control: not_measured  # to confirm: is cooling flow or valve position logged?
+linked_signals: [oxygen, ph]
+
+# Everything below is read by the dashboard only (the rule book ignores it).
+plant:
+  wording:  # how alerts and checks are described to MaverickX scientists
+    today_detection: smell, pigment and colour changes, and the scientists' experience
+    confirmatory_test: outsourced HPLC (results take days)
+  observation_cues: [smell, odour, odor, pigment, colour, color, foam, cloudy, slime]
+  # Column names we expect in their exports. Guesses until we see a real export.
+  export_names:
+    ph: [pH, PH, ph_online]
+    temperature: [Temp, Temperature, Temp (C), T]
+    dissolved_oxygen: [DO, DO (%), DO (%sat), pO2, dO2]
+    biomass_od600: [OD, OD600, OD 600]
+    enzyme_activity: [Activity, Enzyme activity, U/mL]
+  value_defaults:
+    # value: number used to pre-fill the value estimate; source: where it comes from;
+    # confirmed: false until MaverickX gives the number.
+    test_cost:
+      value: 10000
+      source: "team meeting: ~$10,000 per HPLC test (discovery notes say ~$500 per 10 samples)"
+      confirmed: false
+    batches_per_year: {value: null, source: to confirm with MaverickX, confirmed: false}
+    contamination_rate: {value: null, source: to confirm with MaverickX, confirmed: false}
+    lost_batch_cost: {value: null, source: to confirm with MaverickX, confirmed: false}
+    running_cost_per_hour: {value: null, source: to confirm with MaverickX, confirmed: false}
+    tests_avoided_per_case: {value: null, source: to confirm with MaverickX, confirmed: false}
+    later_batches_saved_per_source:
+      value: null
+      source: "to confirm; the source is often found only after several failed batches"
+      confirmed: false

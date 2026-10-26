@@ -6,12 +6,15 @@ campaign's own data, so recording never edits the measurements or the outcomes t
 * ``recorded_checks.csv``: check results added in the dashboard (the campaign's own
   ``investigations.csv`` is left untouched; the two are combined when loading).
 * ``alert_feedback.csv``: per alert, whether it pointed at a real issue.
+* ``actions.csv``: actions taken from the dashboard (a check requested, a batch flagged
+  as at risk, an escalation), each open until someone marks it done.
 """
 
 from __future__ import annotations
 
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -24,6 +27,10 @@ CHECKS = "recorded_checks.csv"
 FEEDBACK = "alert_feedback.csv"
 FEEDBACK_COLUMNS = ["batch_id", "variable", "detector", "start_h", "verdict", "note"]
 VERDICTS = ("real issue", "false alarm", "not sure")
+ACTIONS = "actions.csv"
+ACTION_COLUMNS = ["action_id", "batch_id", "action", "detail", "created_at", "status"]
+ACTION_TYPES = ("request check", "flag at risk", "escalate")
+ACTION_STATUSES = ("open", "done")
 
 
 def records_dir(data_dir: str | Path, root: Path | None = None) -> Path:
@@ -69,6 +76,39 @@ def save_feedback(data_dir, df: pd.DataFrame, root: Path | None = None) -> Path:
     key = ["batch_id", "variable", "detector", "start_h"]
     latest = df[FEEDBACK_COLUMNS].drop_duplicates(subset=key, keep="last")
     return _save(latest, records_dir(data_dir, root) / FEEDBACK)
+
+
+def load_actions(data_dir, root: Path | None = None) -> pd.DataFrame:
+    df = _read(records_dir(data_dir, root) / ACTIONS, ACTION_COLUMNS)
+    return df.astype({"action_id": int}) if len(df) else df
+
+
+def add_actions(data_dir, rows: list[dict], root: Path | None = None) -> pd.DataFrame:
+    """Log new actions (batch_id, action, detail), open, with an id and a time stamp."""
+    existing = load_actions(data_dir, root)
+    bad = {r["action"] for r in rows} - set(ACTION_TYPES)
+    if bad:
+        raise ValueError(f"unknown actions {sorted(bad)}; use {ACTION_TYPES}")
+    start = int(existing["action_id"].max()) + 1 if len(existing) else 1
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    new = pd.DataFrame(
+        [
+            {**r, "action_id": start + i, "created_at": now, "status": "open"}
+            for i, r in enumerate(rows)
+        ],
+        columns=ACTION_COLUMNS,
+    )
+    out = pd.concat([existing, new], ignore_index=True) if len(existing) else new
+    _save(out, records_dir(data_dir, root) / ACTIONS)
+    return out
+
+
+def set_action_status(data_dir, action_id: int, status: str, root: Path | None = None) -> None:
+    if status not in ACTION_STATUSES:
+        raise ValueError(f"status must be one of {ACTION_STATUSES}")
+    df = load_actions(data_dir, root)
+    df.loc[df["action_id"] == int(action_id), "status"] = status
+    _save(df, records_dir(data_dir, root) / ACTIONS)
 
 
 def merge_upload(existing: pd.DataFrame, upload: pd.DataFrame, columns: list[str]) -> pd.DataFrame:

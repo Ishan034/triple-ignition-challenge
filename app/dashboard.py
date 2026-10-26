@@ -2,9 +2,10 @@
 
     streamlit run app/dashboard.py
 
-Pages: campaign overview, batch investigation (time replay, how the assessment
-developed, check results and alert feedback), detection timing, source tracing, a value
-estimate from the plant's own figures, loading a plant's own data, and an about page.
+Pages: campaign overview (what needs attention, review queue, quick actions), batch
+investigation (Summary / Evidence / Actions, with time replay), detection timing, source
+tracing, a value estimate from the plant's own figures, loading a plant's own data (a
+guided column mapper), and an about page.
 """
 
 from __future__ import annotations
@@ -44,8 +45,22 @@ if _loaded is not None and (
 
 import contamination
 from contamination import records
+from contamination.diagnosis import NOT_MEASURED, load_knowledge
 from contamination.evaluate import per_batch
-from contamination.importer import convert, readiness
+from contamination.importer import (
+    FILE_KINDS,
+    GENEALOGY_COLUMNS,
+    convert,
+    convert_mapping,
+    draft_mapping,
+    mapped_variables,
+    mapping_yaml,
+    readiness,
+    suggest_category,
+    suggest_file_kind,
+    suggest_roles,
+    suggest_variable,
+)
 from contamination.monitor import DEFAULT_CONFIG
 from contamination.pipeline import (
     diagnose_batch_as_of,
@@ -56,7 +71,9 @@ from contamination.pipeline import (
     measurements_path,
     run_campaign,
 )
-from contamination.schema import INVESTIGATION_COLUMNS, VARIABLES
+from contamination.plant import load_plant
+from contamination.schema import INVESTIGATION_COLUMNS, OUTCOME_CATEGORIES, VARIABLES
+from contamination.triage import at_risk, escalation_text, headline, triage
 from contamination.value import ValueInputs, estimate
 
 contamination._src_stamp = SRC_STAMP
@@ -254,6 +271,7 @@ with st.sidebar:
             "Load your data",
             "How it works",
         ],
+        key="page",
     )
     show_truth = False
     if campaign.outcomes is not None:
@@ -271,6 +289,7 @@ with st.sidebar:
     records_panel()
 
 kb = campaign.kb
+plant = load_plant(Path(data_dir) / "profile.yaml")
 result = get_result(data_dir, int(n_reference), budget, st.session_state["investigations_csv"])
 origin = (
     " ".join(campaign.outcomes["data_origin"].dropna().astype(str).unique())
@@ -478,9 +497,82 @@ def genealogy_figure(trace) -> go.Figure:
 # --------------------------------------------------------------------------- pages
 
 
+PRIORITY_COLOURS = {
+    "act now": "background-color: rgba(235, 104, 52, 0.28)",
+    "review": "background-color: rgba(236, 131, 90, 0.13)",
+    "at risk": "background-color: rgba(42, 120, 214, 0.15)",
+    "no action": "",
+}
+PRIORITY_ICONS = {"act now": "🔴", "review": "🟠", "at risk": "🔵", "no action": "⚪"}
+
+
+def actions() -> pd.DataFrame:
+    return records.load_actions(data_dir)
+
+
+def log_actions(rows: list[dict]) -> None:
+    records.add_actions(data_dir, rows)
+
+
+def _open_batch(batch_id: str) -> None:
+    """Button callback: jump to the batch page (runs before the rerun, so it may set widgets)."""
+    st.session_state["page"] = "Batch investigation"
+    st.session_state["batch_pick"] = batch_id
+
+
+def _next_check(batch_id: str) -> str:
+    r = result.diagnosis.reports.get(batch_id)
+    return r.next_checks[0]["name"] if r and r.next_checks else ""
+
+
+def campaign_triage() -> pd.DataFrame:
+    return triage(result.overview(campaign), result.trace, actions())
+
+
+def open_actions_panel(batch_id: str | None = None) -> None:
+    """Open actions (all, or one batch's) with a control to mark one done."""
+    acts = actions()
+    if batch_id is not None:
+        acts = acts[acts["batch_id"] == batch_id]
+    if acts.empty:
+        st.caption("No actions logged yet.")
+        return
+    st.dataframe(acts, hide_index=True, width="stretch")
+    open_ = acts[acts["status"] == "open"]
+    if len(open_):
+        c1, c2 = st.columns([3, 1])
+        pick = c1.selectbox(
+            "Open action",
+            open_["action_id"].tolist(),
+            format_func=lambda i: "#{} {} · {} · {}".format(
+                i, *open_.set_index("action_id").loc[i, ["batch_id", "action", "detail"]]
+            ),
+            key=f"done_pick_{batch_id}",
+        )
+        if c2.button("Mark done", key=f"done_{batch_id}"):
+            records.set_action_status(data_dir, pick, "done")
+            st.rerun()
+
+
 def page_overview():
     st.header("Campaign overview")
-    ov = result.overview(campaign)
+    t = campaign_triage()
+    n, breakdown = headline(t)
+    acts = actions()
+    n_open = int((acts["status"] == "open").sum()) if len(acts) else 0
+    open_text = f" · {n_open} open action{'s' if n_open != 1 else ''}" if n_open else ""
+    if n:
+        verb = "needs" if n == 1 else "need"
+        (st.error if (t["priority"] == "act now").any() else st.warning)(
+            f"**{n} batch{'es' if n != 1 else ''} {verb} attention**: {breakdown}{open_text}.",
+            icon="🚨" if (t["priority"] == "act now").any() else "⚠️",
+        )
+    else:
+        st.success(
+            "No batch needs attention: every monitored batch stayed within the reference profile."
+        )
+
+    ov = t
     flagged = ov[ov["process_deviation"] != "within reference"]
     c = st.columns(5)
     c[0].metric("Batches monitored", len(ov))
@@ -492,13 +584,44 @@ def page_overview():
         "Confirmed by test", int(ov["status"].str.startswith("contamination confirmed").sum())
     )
     c[4].metric(
-        "Strong source leads", sum(t.tier == "strong lead" for t in result.trace.candidates)
+        "Strong source leads", sum(x.tier == "strong lead" for x in result.trace.candidates)
     )
 
-    only_flagged = st.toggle("Only flagged batches", value=True)
-    table = truth_columns(flagged if only_flagged else ov)
+    urgent = t[t["priority"] == "act now"]
+    if len(urgent):
+        st.subheader("Act now")
+        for r in urgent.head(6).itertuples(index=False):
+            nxt = _next_check(r.batch_id)
+            st.markdown(
+                f"🔴 **{r.batch_id}**: {r.status}; leading explanation *{r.leading_explanation}*"
+                + (f"; next check: **{nxt}**" if nxt else "")
+            )
+        if len(urgent) > 6:
+            st.caption(f"…and {len(urgent) - 6} more in the table below.")
+    risk = t[t["priority"] == "at risk"]
+    if len(risk):
+        st.markdown(
+            f"🔵 **{len(risk)} batch{'es' if len(risk) != 1 else ''} at risk** through a shared "
+            "possible source (no alert yet): "
+            + ", ".join(risk["batch_id"].head(10))
+            + ("…" if len(risk) > 10 else "")
+        )
+
+    st.subheader("Review queue")
+    only = st.toggle("Only batches that need attention", value=True)
+    table = truth_columns(t[t["priority"] != "no action"] if only else t)
+    table = table.assign(priority=table["priority"].map(lambda p: f"{PRIORITY_ICONS[p]} {p}"))
+    cols = [
+        "batch_id", "priority", "why", "contamination_evidence", "confidence",
+        "first_alert_h", "next_check", "open_actions", "start", "status",
+        "process_deviation", "leading_explanation", "variables_flagged", "affected_scope",
+    ]  # fmt: skip
+    cols += [c for c in table.columns if c not in cols]
+    shown = table[cols]
     st.dataframe(
-        table,
+        shown.style.apply(
+            lambda row: [PRIORITY_COLOURS[row["priority"].split(" ", 1)[1]]] * len(row), axis=1
+        ),
         hide_index=True,
         width="stretch",
         column_config={
@@ -507,9 +630,47 @@ def page_overview():
         },
     )
     st.caption(
-        "Process deviation and contamination evidence are separate: a batch can be strongly abnormal "
-        "with no contamination confirmed. Rankings are for review, not probabilities."
+        "Priority orders the review queue; it is not a probability. Contamination evidence and "
+        "process deviation are separate: a batch can be strongly abnormal with no contamination "
+        "confirmed. *At risk* means the batch used a resource that source tracing ranks as a lead."
     )
+
+    attention = t.loc[t["priority"] != "no action", "batch_id"].tolist()
+    if attention:
+        st.subheader("Quick actions")
+        q1, q2, q3, q4 = st.columns([2, 1, 1, 1])
+        b = q1.selectbox(
+            "Batch",
+            attention,
+            format_func=lambda x: (
+                f"{PRIORITY_ICONS[t.set_index('batch_id').loc[x, 'priority']]} {x}"
+            ),
+            key="quick_batch",
+        )
+        q2.button("Open batch", on_click=_open_batch, args=(b,), width="stretch")
+        nxt = _next_check(b)
+        if q3.button("Request next check", disabled=not nxt, width="stretch"):
+            log_actions([{"batch_id": b, "action": "request check", "detail": nxt}])
+            st.toast(f"Check requested for {b}: {nxt}")
+            st.rerun()
+        if q4.button("Escalate", width="stretch"):
+            log_actions([{"batch_id": b, "action": "escalate", "detail": "from overview"}])
+            st.toast(f"{b} escalated: open the batch to copy the summary")
+            st.rerun()
+        if len(risk):
+            already = (
+                set(acts.loc[acts["action"] == "flag at risk", "batch_id"]) if len(acts) else set()
+            )
+            todo = [x for x in risk["batch_id"] if x not in already]
+            if todo and st.button(f"Flag all {len(todo)} at-risk batches for checking"):
+                why = risk.set_index("batch_id")["why"]
+                log_actions(
+                    [{"batch_id": x, "action": "flag at risk", "detail": why[x]} for x in todo]
+                )
+                st.rerun()
+
+    with st.expander(f"Actions log ({n_open} open)", expanded=bool(n_open)):
+        open_actions_panel()
     fb = feedback()
     if len(fb):
         counts = fb["verdict"].value_counts()
@@ -524,9 +685,14 @@ def page_batch():
     ov = result.overview(campaign)
     flagged = ov.loc[ov["process_deviation"] != "within reference", "batch_id"].tolist()
     options = flagged + [b for b in campaign.monitored_ids if b not in flagged]
+    if st.session_state.get("batch_pick") not in options:
+        st.session_state.pop("batch_pick", None)
     left, right = st.columns([1, 2])
     batch_id = left.selectbox(
-        "Batch", options, format_func=lambda b: f"{b}{' ⚑' if b in flagged else ''}"
+        "Batch",
+        options,
+        format_func=lambda b: f"{b}{' ⚑' if b in flagged else ''}",
+        key="batch_pick",
     )
     m = campaign.measurements[campaign.measurements["batch_id"] == batch_id]
     max_h = float(np.ceil(m["available_h"].max()))
@@ -552,9 +718,6 @@ def page_batch():
             else ""
         )
         st.info(f"Known outcome: **{o['scenario']}**: {o['reason']}{extra}")
-    st.plotly_chart(
-        batch_figure(batch_id, scores, alerts, as_of), width="stretch", theme="streamlit"
-    )
 
     if report is None:
         st.success(
@@ -565,12 +728,30 @@ def page_batch():
                 else ": the batch stayed within the reference profile."
             )
         )
+        risk = at_risk(result.trace).get(batch_id)
+        if risk:
+            st.info(
+                f"🔵 At risk: this batch used {', '.join(risk)}, which source tracing ranks as "
+                "a possible source. Consider a check even without an alert.",
+            )
+        st.plotly_chart(
+            batch_figure(batch_id, scores, alerts, as_of), width="stretch", theme="streamlit"
+        )
         return
 
+    summary, evidence, act = st.tabs(["Summary", "Evidence", "Actions"])
+    with summary:
+        summary_section(batch_id, report, scores, alerts, as_of)
+    with evidence:
+        evidence_section(batch_id, report, alerts)
+    with act:
+        actions_section(batch_id, report, alerts, as_of, max_h, inv)
+
+
+def summary_section(batch_id, report, scores, alerts, as_of):
     a = report.assessment
-    lead_name = report.leading.name if report.leading else "none"
     cards = [
-        ("Leading explanation", lead_name),
+        ("Leading explanation", a["leading_explanation"]),
         ("Contamination evidence", a["contamination_evidence"]),
         ("Process deviation", a["process_deviation"]),
         ("Confidence", a["confidence"]),
@@ -579,122 +760,174 @@ def page_batch():
         with col.container(border=True):
             st.caption(label)
             st.markdown(f"**{value}**")
+    if report.next_checks:
+        ch = report.next_checks[0]
+        st.info(
+            f"**Next check: {ch['name']}** (~{ch['turnaround_h']:g} h, {ch['relative_cost']} "
+            f"cost). {ch['reason']}",
+            icon="🔬",
+        )
+    if plant and plant.wording.get("today_detection"):
+        st.caption(f"Today's method at this plant: {plant.wording['today_detection']}.")
+    st.markdown("**What changed**")
+    first = sorted(alerts, key=lambda x: x.first_raised_h)
+    lines = []
+    for al in first[:5]:
+        lines.append(
+            f"- **{al.variable}** {al.direction} from {al.start_h:g} h: {al.observed_at_peak:.3g} vs "
+            f"reference {al.reference_median_at_peak:.3g} ({al.detector}, {al.persistence})"
+        )
+    if len(first) > 5:
+        lines.append(f"- …and {len(first) - 5} more alerts (Evidence tab)")
+    st.markdown("\n".join(lines))
     st.markdown(
         f"**Quality impact:** {a['quality_impact']}  \n**Affected scope:** {a['affected_scope']}"
     )
+    st.plotly_chart(
+        batch_figure(batch_id, scores, alerts, as_of), width="stretch", theme="streamlit"
+    )
 
-    t1, t2, t3, t4, t6, t7, t5 = st.tabs(
+
+def evidence_section(batch_id, report, alerts):
+    st.subheader("Explanations")
+    hyp = pd.DataFrame(
         [
-            "Explanations",
-            "Alerts",
-            "Evidence",
-            "Next checks & sources",
-            "How it developed",
-            "Alert feedback",
-            "Full report",
+            {
+                "id": h.id,
+                "explanation": h.name,
+                "tier": h.tier,
+                "score": h.score,
+                "supporting": ", ".join(f"{e} {report.evidence[e].name}" for e in h.supporting),
+                "contradicting": ", ".join(
+                    f"{e} {report.evidence[e].name}" for e in h.contradicting
+                ),
+                "missing": ", ".join(h.missing),
+            }
+            for h in report.hypotheses
         ]
     )
-    with t1:
-        hyp = pd.DataFrame(
+    st.dataframe(hyp, hide_index=True, width="stretch")
+    st.caption(
+        "Score = supporting weights − contradicting weights. It orders explanations for review; it is not a probability."
+    )
+    st.subheader("Evidence items")
+    ev = pd.DataFrame(
+        [
+            {"id": e.id, "evidence": e.name, "state": e.state, "detail": e.detail}
+            for e in report.evidence.values()
+        ]
+    )
+    st.dataframe(ev, hide_index=True, width="stretch")
+    st.subheader("Alerts")
+    al = pd.DataFrame([x.to_dict() for x in alerts])
+    cols = [
+        "variable", "detector", "direction", "start_h", "end_h", "first_raised_h", "persistence",
+        "observed_at_peak", "reference_median_at_peak", "robust_z_at_peak",
+        "corroborating_variables", "detail", "data_quality_warnings",
+    ]  # fmt: skip
+    st.dataframe(al[cols], hide_index=True, width="stretch")
+    st.subheader("Possible sources (leads, not proof)")
+    if not report.sources:
+        st.write("None: source tracing not run, or contamination not suspected.")
+    for src in report.sources:
+        st.markdown(
+            f"- **{src['resource']}** ({src['tier']}): {src['explanation']}  \n  *Suggested check:* {src['suggested_check']}"
+        )
+    st.subheader("How it developed")
+    timeline_section(batch_id)
+    with st.expander("Full report"):
+        st.markdown(report.to_markdown())
+
+
+def actions_section(batch_id, report, alerts, as_of, max_h, inv):
+    st.subheader("Request a check")
+    if report.next_checks:
+        names = [ch["name"] for ch in report.next_checks]
+        r1, r2 = st.columns([3, 1])
+        pick = r1.selectbox("Check to request", names, key="request_pick")
+        if r2.button("Request check", width="stretch"):
+            log_actions([{"batch_id": batch_id, "action": "request check", "detail": pick}])
+            st.toast(f"Requested: {pick}")
+            st.rerun()
+    st.subheader("Record a check result")
+    with st.form("record_check", clear_on_submit=True):
+        f1, f2, f3 = st.columns(3)
+        check = f1.selectbox(
+            "Check", list(kb.checks), format_func=lambda c: f"{c}: {kb.checks[c]['name']}"
+        )
+        res = f2.selectbox("Result", ["positive", "negative", "inconclusive"])
+        hour = f3.number_input(
+            "Result available at (elapsed h)",
+            0.0,
+            max(200.0, max_h + 48.0),  # long batches run past 200 h
+            float(as_of if as_of is not None else max_h),
+        )
+        note = st.text_input("Note")
+        if st.form_submit_button("Add result"):
+            row = pd.DataFrame(
+                [[batch_id, check, res, hour, note or None]], columns=INVESTIGATION_COLUMNS
+            )
+            record_check(row)
+            st.rerun()
+    batch_inv = inv[inv["batch_id"] == batch_id]
+    if len(batch_inv):
+        st.dataframe(batch_inv, hide_index=True, width="stretch")
+
+    st.subheader("Alert feedback")
+    feedback_section(batch_id, alerts)
+
+    linked = {
+        b: why
+        for b, why in at_risk(result.trace, set(campaign.monitored_ids)).items()
+        if any(why_r.split(" (")[0] in {s["resource"] for s in report.sources} for why_r in why)
+    }
+    if linked:
+        st.subheader("Batches at risk through the same source")
+        st.write(
+            "These batches used a resource this batch shares with other cases, and have no "
+            "contamination call yet: " + ", ".join(sorted(linked))
+        )
+        if st.button(f"Flag {len(linked)} at-risk batches for checking"):
+            log_actions(
+                [
+                    {
+                        "batch_id": b,
+                        "action": "flag at risk",
+                        "detail": f"linked to {batch_id}: " + ", ".join(w),
+                    }
+                    for b, w in sorted(linked.items())
+                ]
+            )
+            st.rerun()
+
+    st.subheader("Escalate")
+    text = escalation_text(batch_id, report, plant.name if plant else "", as_of)
+    st.text_area("Summary to send (copy it, or download)", text, height=260)
+    e1, e2, e3 = st.columns(3)
+    e1.download_button("Download summary (.txt)", text, f"{batch_id}_escalation.txt", "text/plain")
+    e2.download_button(
+        "Download full report (Markdown)",
+        report.to_markdown(),
+        f"{batch_id}_report.md",
+        "text/markdown",
+    )
+    if e3.button("Log escalation"):
+        log_actions(
             [
                 {
-                    "id": h.id,
-                    "explanation": h.name,
-                    "tier": h.tier,
-                    "score": h.score,
-                    "supporting": ", ".join(f"{e} {report.evidence[e].name}" for e in h.supporting),
-                    "contradicting": ", ".join(
-                        f"{e} {report.evidence[e].name}" for e in h.contradicting
-                    ),
-                    "missing": ", ".join(h.missing),
+                    "batch_id": batch_id,
+                    "action": "escalate",
+                    "detail": report.assessment["leading_explanation"],
                 }
-                for h in report.hypotheses
             ]
         )
-        st.dataframe(hyp, hide_index=True, width="stretch")
-        st.caption(
-            "Score = supporting weights − contradicting weights. It orders explanations for review; it is not a probability."
-        )
-    with t2:
-        al = pd.DataFrame([x.to_dict() for x in alerts])
-        cols = [
-            "variable",
-            "detector",
-            "direction",
-            "start_h",
-            "end_h",
-            "first_raised_h",
-            "persistence",
-            "observed_at_peak",
-            "reference_median_at_peak",
-            "robust_z_at_peak",
-            "corroborating_variables",
-            "detail",
-            "data_quality_warnings",
-        ]
-        st.dataframe(al[cols], hide_index=True, width="stretch")
-    with t3:
-        ev = pd.DataFrame(
-            [
-                {"id": e.id, "evidence": e.name, "state": e.state, "detail": e.detail}
-                for e in report.evidence.values()
-            ]
-        )
-        st.dataframe(ev, hide_index=True, width="stretch")
-    with t4:
-        st.subheader("Recommended next checks")
-        for i, ch in enumerate(report.next_checks, 1):
-            st.markdown(
-                f"{i}. **{ch['name']}** (~{ch['turnaround_h']:g} h, {ch['relative_cost']} cost): {ch['reason']}"
-            )
-        st.subheader("Possible sources (leads, not proof)")
-        if as_of is not None:
-            st.caption("Source tracing uses the end-of-batch statuses of the whole campaign.")
-        if not report.sources:
-            st.write("None: source tracing not run, or contamination not suspected.")
-        for src in report.sources:
-            st.markdown(
-                f"- **{src['resource']}** ({src['tier']}): {src['explanation']}  \n  *Suggested check:* {src['suggested_check']}"
-            )
-        st.subheader("Record a check result")
-        with st.form("record_check", clear_on_submit=True):
-            f1, f2, f3 = st.columns(3)
-            check = f1.selectbox(
-                "Check", list(kb.checks), format_func=lambda c: f"{c}: {kb.checks[c]['name']}"
-            )
-            res = f2.selectbox("Result", ["positive", "negative", "inconclusive"])
-            hour = f3.number_input(
-                "Result available at (elapsed h)",
-                0.0,
-                max(200.0, max_h + 48.0),  # long batches run past 200 h
-                float(as_of if as_of is not None else max_h),
-            )
-            note = st.text_input("Note")
-            if st.form_submit_button("Add result"):
-                row = pd.DataFrame(
-                    [[batch_id, check, res, hour, note or None]], columns=INVESTIGATION_COLUMNS
-                )
-                record_check(row)
-                st.rerun()
-        batch_inv = inv[inv["batch_id"] == batch_id]
-        if len(batch_inv):
-            st.dataframe(batch_inv, hide_index=True, width="stretch")
-        st.download_button(
-            "Download all recorded checks (CSV)",
-            st.session_state["investigations_csv"],
-            "investigations.csv",
-            "text/csv",
-        )
-    with t6:
-        timeline_section(batch_id)
-    with t7:
-        feedback_section(batch_id, alerts)
-    with t5:
-        md = report.to_markdown()
-        st.download_button(
-            "Download report (Markdown)", md, f"{batch_id}_report.md", "text/markdown"
-        )
-        st.markdown(md)
+        st.rerun()
+    st.caption(
+        "Nothing is sent from the dashboard: escalation is logged here and the summary is yours to send."
+    )
+
+    st.subheader("Actions for this batch")
+    open_actions_panel(batch_id)
 
 
 def timeline_section(batch_id: str):
@@ -864,11 +1097,36 @@ def page_value():
         "what evaluation measured (how much earlier it warns, how many false alarms it raises). Every "
         "cost and rate below must come from the plant."
     )
-    st.warning(
-        "The pre-filled values are placeholders for the demo, not MaverickX figures. "
-        "Replace them before using the result.",
-        icon="⚠️",
-    )
+    sources = {"Demo placeholders": None, "MaverickX draft profile": "maverickx"}
+    if plant is not None and plant.value_defaults:
+        sources = {f"{plant.name}": Path(data_dir) / "profile.yaml", **sources}
+    chosen = sources[st.selectbox("Pre-fill from", list(sources))]
+    prof = load_plant(chosen) if chosen else None
+    defaults = prof.value_defaults if prof else {}
+
+    def dflt(key: str, placeholder: float) -> float:
+        d = defaults.get(key)
+        return float(d.value) if d is not None and d.value is not None else placeholder
+
+    if prof is None:
+        st.warning(
+            "The pre-filled values are placeholders for the demo, not MaverickX figures. "
+            "Replace them before using the result.",
+            icon="⚠️",
+        )
+    else:
+        unconfirmed = [
+            f"- **{k.replace('_', ' ')}**: "
+            + (f"{v.value:,g} ({v.source})" if v.value is not None else f"placeholder ({v.source})")
+            for k, v in defaults.items()
+            if not v.confirmed
+        ]
+        if unconfirmed:
+            st.warning(
+                f"From **{prof.name}**. Not yet confirmed by the plant, so the result is only "
+                "illustrative until these are replaced:\n" + "\n".join(unconfirmed),
+                icon="⚠️",
+            )
     pb = campaign_timing()
     default_lead = 0.0
     if pb is not None:
@@ -889,12 +1147,31 @@ def page_value():
     a, b = st.columns(2)
     with a:
         st.subheader("Your plant")
-        batches = st.number_input("Batches per year", 1.0, 10000.0, 100.0, 10.0)
-        rate = st.number_input("Share lost to contamination today (%)", 0.0, 100.0, 5.0, 0.5) / 100
-        lost = st.number_input("Cost of one lost batch", 0.0, 1e8, 50000.0, 1000.0)
-        hourly = st.number_input("Cost per hour of running a doomed batch", 0.0, 1e6, 500.0, 50.0)
+        batches = st.number_input(
+            "Batches per year", 1.0, 10000.0, dflt("batches_per_year", 100.0), 10.0
+        )
+        rate = (
+            st.number_input(
+                "Share lost to contamination today (%)",
+                0.0,
+                100.0,
+                100 * dflt("contamination_rate", 0.05),
+                0.5,
+            )
+            / 100
+        )
+        lost = st.number_input(
+            "Cost of one lost batch", 0.0, 1e8, dflt("lost_batch_cost", 50000.0), 1000.0
+        )
+        hourly = st.number_input(
+            "Cost per hour of running a doomed batch",
+            0.0,
+            1e6,
+            dflt("running_cost_per_hour", 500.0),
+            50.0,
+        )
         test_cost = st.number_input(
-            "Cost of one expensive confirmatory test", 0.0, 1e6, 10000.0, 500.0
+            "Cost of one expensive confirmatory test", 0.0, 1e6, dflt("test_cost", 10000.0), 500.0
         )
         fa_cost = st.number_input("Cost of checking one false alarm", 0.0, 1e6, 200.0, 50.0)
     with b:
@@ -909,9 +1186,15 @@ def page_value():
         )
         shared = st.slider("Share of cases from a shared source (%)", 0, 100, 50) / 100
         spared = st.number_input(
-            "Later batches spared once a shared source is found", 0.0, 50.0, 1.0, 0.5
+            "Later batches spared once a shared source is found",
+            0.0,
+            50.0,
+            dflt("later_batches_saved_per_source", 1.0),
+            0.5,
         )
-        tests = st.number_input("Expensive tests avoided per case", 0.0, 20.0, 1.0, 0.5)
+        tests = st.number_input(
+            "Expensive tests avoided per case", 0.0, 20.0, dflt("tests_avoided_per_case", 1.0), 0.5
+        )
         good = st.number_input(
             "Good batches not scrapped per year (sensor fault recognised)", 0.0, 100.0, 0.0, 1.0
         )
@@ -964,13 +1247,323 @@ def _template_zip() -> bytes:
     return buf.getvalue()
 
 
-def page_load():
-    st.header("Load your data")
-    st.write(
-        "Upload your plant's exports (CSV or Excel) together with a `mapping.yaml` that says which file and "
-        "column holds what. The data is converted, checked, and can then be monitored here. Values are copied "
-        "as they are: nothing is filled, rescaled or deleted."
+PROFILES = {
+    "MaverickX (draft profile, to confirm)": "maverickx",
+    "Generic (choose roles yourself)": None,
+}
+NONE = "(none)"
+IGNORE = "ignore"
+NEW = "new variable…"
+
+
+@st.cache_data(show_spinner=False)
+def _read_upload(name: str, data: bytes) -> pd.DataFrame:
+    if name.lower().endswith((".xlsx", ".xls")):
+        return pd.read_excel(io.BytesIO(data))
+    return pd.read_csv(io.BytesIO(data))
+
+
+def _pick(label, columns, default, key, optional=False):
+    options = ([NONE] if optional else []) + list(columns)
+    index = options.index(default) if default in options else 0
+    value = st.selectbox(label, options, index=index, key=key)
+    return None if value == NONE else value
+
+
+def _variable_editor(names, suggested: dict, key: str) -> tuple[dict, dict, list[str]]:
+    """Table of export names -> variables. Returns (name map, new variables, problems)."""
+    known = sorted(VARIABLES)
+    rows = []
+    for n in names:
+        v = suggested.get(n)
+        rows.append(
+            {
+                "in your export": str(n),
+                "maps to": v if v else IGNORE,
+                "new variable name": "",
+                "unit": VARIABLES[v].unit if v in VARIABLES else "",
+                "noise floor": None,
+                "plausible min": None,
+                "plausible max": None,
+            }
+        )
+    edited = st.data_editor(
+        pd.DataFrame(rows),
+        hide_index=True,
+        width="stretch",
+        key=key,
+        disabled=["in your export"],
+        column_config={
+            "maps to": st.column_config.SelectboxColumn(
+                options=[IGNORE, *known, NEW], required=True
+            ),
+            "noise floor": st.column_config.NumberColumn(
+                help="New variables only: the smallest spread that counts as real (sensor resolution)."
+            ),
+        },
     )
+    mapping, new, problems = {}, {}, []
+    for r in edited.itertuples(index=False):
+        target = r[1]
+        if target == IGNORE:
+            continue
+        if target == NEW:
+            name = "".join(ch if ch.isalnum() else "_" for ch in str(r[2]).strip().lower()).strip(
+                "_"
+            )
+            nums = (r[4], r[5], r[6])
+            if not name or any(x is None or pd.isna(x) for x in nums) or not str(r[3]).strip():
+                problems.append(
+                    f"'{r[0]}': a new variable needs a name, unit, noise floor and plausible range"
+                )
+                continue
+            new[name] = {
+                "unit": str(r[3]).strip(),
+                "min_scale": float(r[4]),
+                "plausible_range": [float(r[5]), float(r[6])],
+                "description": str(r[0]),
+            }
+            target = name
+        mapping[str(r[0])] = target
+    return mapping, new, problems
+
+
+def _file_spec(fname: str, df: pd.DataFrame, export_names) -> tuple[str, dict, dict, list[str]]:
+    """Widgets for one uploaded file. Returns (kind, spec, new variables, problems)."""
+    st.dataframe(df.head(5), hide_index=True, width="stretch")
+    kind = st.selectbox(
+        "This file holds",
+        FILE_KINDS,
+        index=FILE_KINDS.index(suggest_file_kind(df)),
+        key=f"kind_{fname}",
+    )
+    if kind == "ignore":
+        return kind, {}, {}, []
+    draft = draft_mapping({fname: df}, export_names, kinds={fname: kind})
+    cols = list(df.columns)
+    new, problems = {}, []
+    if kind in FILE_KINDS[:2]:
+        d = draft["measurements"][0]
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            batch = _pick("Batch ID column", cols, d.get("batch_id"), f"batch_{fname}")
+        time_kind = c2.radio(
+            "Time is",
+            ["date and time", "hours since batch start"],
+            index=0 if "timestamp" in d or "elapsed_hours" not in d else 1,
+            key=f"tkind_{fname}",
+        )
+        with c3:
+            tcol = _pick(
+                "Time column",
+                cols,
+                d.get("timestamp") or d.get("elapsed_hours"),
+                f"time_{fname}",
+            )
+        spec = {
+            "file": fname,
+            "layout": "wide" if kind == FILE_KINDS[0] else "long",
+            "batch_id": batch,
+        }
+        spec["timestamp" if time_kind == "date and time" else "elapsed_hours"] = tcol
+        if kind == FILE_KINDS[0]:
+            spec["source"] = "online_sensor"
+            spec["result_delay_h"] = st.number_input(
+                "Result delay (h): how long after the reading it can be seen",
+                0.0, 240.0, 0.0, 0.5, key=f"delay_{fname}",
+            )  # fmt: skip
+            others = [c for c in cols if c not in (batch, tcol)]
+            columns, new, problems = _variable_editor(others, d.get("columns", {}), f"vars_{fname}")
+            spec["columns"] = columns
+            units = {}
+            for c, v in columns.items():
+                unit = new.get(v, {}).get("unit") or (VARIABLES[v].unit if v in VARIABLES else None)
+                if unit:
+                    units[v] = unit
+            spec["units"] = units
+        else:
+            spec["source"] = "offline_assay"
+            l1, l2, l3, l4 = st.columns(4)
+            with l1:
+                avail = _pick(
+                    "Result time column", cols, d.get("available_at"), f"avail_{fname}", True
+                )
+            with l2:
+                var = _pick("Test / variable name column", cols, d.get("variable"), f"var_{fname}")
+            with l3:
+                val = _pick("Value column", cols, d.get("value"), f"val_{fname}")
+            with l4:
+                unit = _pick("Unit column", cols, d.get("unit"), f"unit_{fname}", True)
+            spec |= {"variable": var, "value": val}
+            if unit:
+                spec["unit"] = unit
+            if avail:
+                spec["available_at"] = avail
+            else:
+                spec["result_delay_h"] = st.number_input(
+                    "No result time: typical delay from sample to result (h)",
+                    0.0, 240.0, 0.0, 0.5, key=f"delay_{fname}",
+                )  # fmt: skip
+            names = df[var].dropna().astype(str).unique()[:500] if var else []
+            suggested = {n: suggest_variable(n, export_names) for n in names}
+            spec["variable_map"], new, problems = _variable_editor(
+                names, suggested, f"vars_{fname}"
+            )
+        return kind, spec, new, problems
+    if kind == "batch records":
+        d = draft["batches"]["columns"]
+        spec = {"file": fname, "columns": {}}
+        fields = [
+            ("batch_id", "Batch ID", False),
+            ("start_time", "Start (inoculation) time", False),
+        ]
+        fields += [(g, g.replace("_", " ").capitalize(), True) for g in GENEALOGY_COLUMNS]
+        for col, (f, label, optional) in zip(st.columns(len(fields)), fields):
+            with col:
+                c = _pick(label, cols, d.get(f), f"{f}_{fname}", optional)
+            if c:
+                spec["columns"][f] = c
+        return kind, spec, {}, []
+    if kind == "outcomes":
+        d = draft["outcomes"]
+        spec = {"file": fname, "columns": {}}
+        fields = [
+            ("batch_id", "Batch ID", False),
+            ("category", "Outcome", False),
+            ("onset_h", "Problem started (h)", True),
+            ("reference_event_h", "First noticed (h)", True),
+            ("reason", "Comment", True),
+        ]
+        for col, (f, label, optional) in zip(st.columns(len(fields)), fields):
+            with col:
+                c = _pick(label, cols, d["columns"].get(f), f"{f}_{fname}", optional)
+            if c:
+                spec["columns"][f] = c
+        labels = df[spec["columns"]["category"]].dropna().astype(str).unique()[:100]
+        guess = {lab: suggest_category(lab) for lab in labels}
+        edited = st.data_editor(
+            pd.DataFrame(
+                {"outcome in your file": labels, "means": [guess[x] or "" for x in labels]}
+            ),
+            hide_index=True,
+            key=f"cats_{fname}",
+            disabled=["outcome in your file"],
+            column_config={
+                "means": st.column_config.SelectboxColumn(options=list(OUTCOME_CATEGORIES))
+            },
+        )
+        cmap = dict(zip(edited["outcome in your file"], edited["means"]))
+        unmapped = [k for k, v in cmap.items() if not v]
+        spec["category_map"] = cmap
+        return kind, spec, {}, [f"outcome '{k}' needs a meaning" for k in unmapped]
+    d = draft.get("observations", [{}])[0]
+    spec = {"file": fname}
+    for col, (f, label) in zip(
+        st.columns(3), [("batch_id", "Batch ID"), ("timestamp", "Time"), ("text", "Note text")]
+    ):
+        with col:
+            spec[f] = _pick(label, cols, d.get(f), f"{f}_{fname}")
+    return kind, spec, {}, []
+
+
+def guided_mapper(name: str, profile: str | None) -> None:
+    plant_p = load_plant(profile) if profile else None
+    export_names = plant_p.export_names if plant_p else None
+    files = st.file_uploader(
+        "Your exports (CSV or Excel), all at once",
+        accept_multiple_files=True,
+        type=["csv", "xlsx", "xls"],
+        key="mapper_files",
+    )
+    if not files:
+        st.info(
+            "Upload the files exported from your historian, lab system and batch records. "
+            "Each column gets a suggested meaning; you confirm or change it. No YAML needed."
+        )
+        return
+    frames = {f.name: _read_upload(f.name, f.getvalue()) for f in files}
+    m: dict = {"process_name": name, "variables": {}, "measurements": []}
+    problems: list[str] = []
+    st.markdown("**1. What each file holds and which columns to use**")
+    for fname, df in frames.items():
+        with st.expander(f"📄 {fname}: {len(df):,} rows, {len(df.columns)} columns", expanded=True):
+            kind, spec, new, probs = _file_spec(fname, df, export_names)
+        problems += probs
+        m["variables"] |= new
+        if kind in FILE_KINDS[:2]:
+            m["measurements"].append(spec)
+        elif kind == "batch records":
+            m["batches"] = spec
+        elif kind == "outcomes":
+            m["outcomes"] = spec
+        elif kind == "operator notes":
+            m.setdefault("observations", []).append(spec)
+
+    st.markdown("**2. Which signal plays each role in the diagnosis rules**")
+    variables = mapped_variables(m)
+    roles = suggest_roles(variables)
+    if profile:
+        for role, v in load_knowledge(profile=profile).roles.items():
+            if v in variables:
+                roles[role] = v
+    chosen = {}
+    role_cols = st.columns(4)
+    for i, (role, default) in enumerate(roles.items()):
+        options = [*variables, NOT_MEASURED]
+        chosen[role] = role_cols[i % 4].selectbox(
+            role.replace("_", " "),
+            options,
+            index=options.index(default) if default in options else len(options) - 1,
+            key=f"role_{role}",
+        )
+    if profile and chosen == load_knowledge(profile=profile).roles:
+        m["use_profile"] = profile
+    else:
+        m["roles"] = chosen
+        if profile:
+            m["linked_signals"] = list(load_knowledge(profile=profile).linked_signals)
+
+    if not m["measurements"]:
+        problems.append("no file is marked as online signals or lab results")
+    if "batches" not in m:
+        problems.append("no file is marked as batch records (needed for start times and genealogy)")
+    st.markdown("**3. Convert**")
+    for p in problems:
+        st.warning(p, icon="⚠️")
+    c1, c2 = st.columns(2)
+    c2.download_button(
+        "Download this mapping (mapping.yaml)",
+        mapping_yaml(m),
+        "mapping.yaml",
+        "text/yaml",
+        help="Reuse it next time, or from the command line: python -m contamination.importer convert",
+    )
+    if c1.button(
+        "Convert and check", type="primary", disabled=bool(problems), key="guided_convert"
+    ):
+        raw = Path(tempfile.mkdtemp(prefix="upload_"))
+        for f in files:
+            (raw / Path(f.name).name).write_bytes(f.getvalue())
+        _convert(lambda out: convert_mapping(m, raw, out), name)
+
+
+def _convert(run, name: str) -> None:
+    out = IMPORT_ROOT / ("".join(ch for ch in name if ch.isalnum() or ch in "-_") or "imported")
+    try:
+        res = run(out)
+    except (ValueError, KeyError, TypeError) as e:
+        st.error(f"Could not convert: {e}")
+        return
+    st.success(
+        f"Converted into `{out}`: " + ", ".join(f"{k} {len(v)} rows" for k, v in res.tables.items())
+    )
+    if res.unmapped:
+        with st.expander(f"{len(res.unmapped)} columns or names not imported"):
+            st.write(res.unmapped)
+    st.session_state["imported_dir"] = str(out)
+
+
+def yaml_upload(name: str) -> None:
     if TEMPLATE_DIR.exists():
         st.download_button(
             "Download the data template (example exports + mapping.yaml)",
@@ -978,34 +1571,41 @@ def page_load():
             "data-template.zip",
             "application/zip",
         )
-    name = st.text_input("Name for this dataset", "maverickx")
     files = st.file_uploader(
         "Exports and mapping.yaml",
         accept_multiple_files=True,
         type=["csv", "xlsx", "xls", "yaml", "yml"],
+        key="yaml_files",
     )
-    if files and st.button("Convert and check"):
+    if files and st.button("Convert and check", key="yaml_convert"):
         if not any(f.name in ("mapping.yaml", "mapping.yml") for f in files):
             st.error("Include a mapping.yaml (see the template).")
             return
         raw = Path(tempfile.mkdtemp(prefix="upload_"))
         for f in files:
             (raw / Path(f.name).name).write_bytes(f.getvalue())
-        out = IMPORT_ROOT / "".join(ch for ch in name if ch.isalnum() or ch in "-_")
         mapping = raw / ("mapping.yaml" if (raw / "mapping.yaml").exists() else "mapping.yml")
-        try:
-            res = convert(mapping, out)
-        except (ValueError, KeyError) as e:
-            st.error(f"Could not convert: {e}")
-            return
-        st.success(
-            f"Converted into `{out}`: "
-            + ", ".join(f"{k} {len(v)} rows" for k, v in res.tables.items())
-        )
-        if res.unmapped:
-            with st.expander(f"{len(res.unmapped)} columns or names not used by the mapping"):
-                st.write(res.unmapped)
-        st.session_state["imported_dir"] = str(out)
+        _convert(lambda out: convert(mapping, out), name)
+
+
+def page_load():
+    st.header("Load your data")
+    st.write(
+        "Upload your plant's exports (CSV or Excel). The data is converted, checked, and can then "
+        "be monitored here. Values are copied as they are: nothing is filled, rescaled or deleted."
+    )
+    c1, c2 = st.columns(2)
+    name = c1.text_input("Name for this dataset", "maverickx")
+    profile = PROFILES[c2.selectbox("Process profile", list(PROFILES))]
+    if profile:
+        p = load_plant(profile)
+        if p:
+            st.caption(f"Profile: {p.name}. {p.status}.")
+    guided, from_yaml = st.tabs(["Guided column mapping", "I have a mapping.yaml"])
+    with guided:
+        guided_mapper(name, profile)
+    with from_yaml:
+        yaml_upload(name)
     target = st.session_state.get("imported_dir")
     if target:
         st.subheader("Readiness")

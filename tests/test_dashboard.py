@@ -134,3 +134,48 @@ def test_default_dataset_is_the_synthetic_demo():
     at.run()
     assert at.sidebar.selectbox[0].value == "Synthetic demo (simulated contamination)"
     assert not at.sidebar.text_input  # no free-text folder unless "Other folder…" is chosen
+
+
+def test_overview_banner_and_quick_actions():
+    at = _app("Campaign overview")
+    assert any("need attention" in e.value for e in at.error)
+    assert any(s.value == "Act now" for s in at.subheader)
+    next(b for b in at.button if b.label == "Request next check").click()
+    at.run()
+    assert not at.exception
+    assert any("1 open action" in e.value for e in at.error)
+    next(b for b in at.button if b.label.startswith("Flag all")).click()
+    at.run()
+    labels = [e.label for e in at.expander]
+    assert any(lab.startswith("Actions log (") and "(1 open)" not in lab for lab in labels)
+
+
+def test_open_batch_from_overview():
+    at = _app("Campaign overview")
+    batch = at.selectbox(key="quick_batch").value
+    next(b for b in at.button if b.label == "Open batch").click()
+    at.run()
+    assert not at.exception
+    assert at.sidebar.radio[0].value == "Batch investigation"
+    assert at.selectbox(key="batch_pick").value == batch
+
+
+def test_batch_page_summary_evidence_actions():
+    at = _app("Batch investigation")
+    assert [t.label for t in at.tabs][:3] == ["Summary", "Evidence", "Actions"]
+    assert any(i.value.startswith("**Next check:") for i in at.info)
+    summary = next(t for t in at.text_area if t.label.startswith("Summary to send"))
+    assert "Contamination evidence:" in summary.value
+    next(b for b in at.button if b.label == "Log escalation").click()
+    at.run()
+    assert not at.exception
+    assert any("escalate" in str(df.value.to_dict()) for df in at.dataframe)
+
+
+def test_value_page_maverickx_defaults():
+    at = _app("Value estimate")
+    pick = next(s for s in at.selectbox if s.label == "Pre-fill from")
+    pick.set_value("MaverickX draft profile")
+    at.run()
+    assert not at.exception
+    assert any("Not yet confirmed" in w.value for w in at.warning)

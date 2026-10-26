@@ -9,8 +9,12 @@ import yaml
 
 from contamination.importer import (
     convert,
+    convert_mapping,
+    draft_mapping,
     readiness,
     register_variables,
+    suggest_category,
+    suggest_variable,
     write_example_exports,
 )
 from contamination.pipeline import fit, load_campaign, run_campaign
@@ -125,3 +129,44 @@ def test_excel_exports(tmp_path):
     (tmp_path / "mapping.yaml").write_text(yaml.safe_dump(mapping))
     res = convert(tmp_path / "mapping.yaml", tmp_path / "out")
     assert res.tables["measurements"]["value"].tolist() == [7.0, 6.9]
+
+
+def test_draft_mapping_recovers_the_template_mapping(exported, tmp_path):
+    frames = {f.name: pd.read_csv(f) for f in exported.glob("*.csv")}
+    draft = draft_mapping(frames)
+    hand = yaml.safe_load((exported / "mapping.yaml").read_text())
+    for key in ("batches", "roles"):
+        assert draft[key] == hand[key]
+    assert draft["outcomes"]["category_map"] == hand["outcomes"]["category_map"]
+    by_file = {s["file"]: s for s in draft["measurements"]}
+    for spec in hand["measurements"]:
+        got = by_file[spec["file"]]
+        assert got.get("columns") == spec.get("columns")
+        assert got.get("variable_map") == spec.get("variable_map")
+    # The draft converts to the same campaign as the hand-written mapping.
+    a = convert_mapping(draft, exported, tmp_path / "draft").tables["measurements"]
+    b = convert(exported / "mapping.yaml", tmp_path / "hand").tables["measurements"]
+    assert len(a) == len(b) and a["value"].sum() == pytest.approx(b["value"].sum())
+
+
+def test_suggestions_are_conservative():
+    assert suggest_variable("pH") == "ph"
+    assert suggest_variable("pH offline") == "ph_offline"
+    assert suggest_variable("Phase") is None  # 'ph' only as a whole word
+    assert suggest_variable("Batch") is None
+    assert suggest_variable("dO2", {"dissolved_oxygen": ["dO2"]}) == "dissolved_oxygen"
+    assert suggest_category("Contaminated") == "contamination"
+    assert suggest_category("OK") == "normal"
+    assert suggest_category("???") is None  # left for the user to choose
+
+
+def test_maverickx_profile_marks_unconfirmed_numbers():
+    from contamination.diagnosis import load_knowledge
+    from contamination.plant import load_plant
+
+    kb = load_knowledge(profile="maverickx")
+    assert kb.roles["ph"] == "ph" and "MaverickX" in kb.review_status
+    plant = load_plant("maverickx")
+    assert plant.value_defaults["test_cost"].value == 10000
+    assert not any(v.confirmed for v in plant.value_defaults.values())
+    assert load_plant("indpensim") is None  # no plant section

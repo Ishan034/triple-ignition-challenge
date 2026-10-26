@@ -197,7 +197,14 @@ class ImportResult:
 def convert(mapping_path: str | Path, out_dir: str | Path) -> ImportResult:
     """Convert plant exports described by ``mapping.yaml`` into a campaign folder."""
     mapping_path = Path(mapping_path)
-    base, m = mapping_path.parent, yaml.safe_load(mapping_path.read_text())
+    return convert_mapping(yaml.safe_load(mapping_path.read_text()), mapping_path.parent, out_dir)
+
+
+def convert_mapping(m: dict, base: str | Path, out_dir: str | Path) -> ImportResult:
+    """Convert exports in ``base`` using a mapping given as a dict (same keys as the YAML).
+
+    The dashboard's column mapper builds this dict from the user's choices."""
+    base = Path(base)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     register_variables(m.get("variables"))
@@ -241,14 +248,258 @@ def convert(mapping_path: str | Path, out_dir: str | Path) -> ImportResult:
     for name, df in tables.items():
         df.to_csv(out / f"{name}.csv", index=False)
     (out / "variables.yaml").write_text(yaml.safe_dump(m.get("variables") or {}, sort_keys=False))
-    if "roles" in m:
+    if "use_profile" in m:  # follow a packaged profile (e.g. maverickx)
+        (out / "profile.yaml").write_text(yaml.safe_dump({"use": m["use_profile"]}))
+    elif "roles" in m:
         profile = {
             "name": m.get("process_name", "imported process"),
             "roles": m["roles"],
             "parameters": m.get("parameters", {}),
         }
+        if m.get("linked_signals"):
+            profile["linked_signals"] = m["linked_signals"]
         (out / "profile.yaml").write_text(yaml.safe_dump(profile, sort_keys=False))
     return ImportResult(out, tables, unmapped)
+
+
+# --------------------------------------------------------------------------- suggestions
+# Used by the dashboard's column mapper to pre-fill its choices. Suggestions are only
+# defaults shown to the user; nothing is imported until they confirm the mapping.
+
+VARIABLE_HINTS: dict[str, tuple[str, ...]] = {  # variable -> name fragments (lower case)
+    "ph_offline": ("ph offline", "offline ph", "ph (lab)", "lab ph"),
+    "ph": ("ph",),
+    "temperature": ("temp", "temperature"),
+    "dissolved_oxygen": ("do (%", "do%", "dissolved oxygen", "do2 %", "po2", "do sat", "dot"),
+    "do2_mg_l": ("do (mg", "do mg", "do2 mg", "dissolved oxygen (mg"),
+    "biomass_od600": ("od600", "od 600", "optical density", "od"),
+    "enzyme_activity": ("activity", "enzyme", "amylase", "titre", "titer"),
+    "our": ("our", "oxygen uptake"),
+    "cer": ("cer", "co2 evolution", "carbon evolution"),
+    "co2_offgas": ("co2", "off-gas co2", "offgas co2", "exhaust co2"),
+    "substrate": ("glucose", "substrate", "sugar"),
+    "base_flow": ("base", "naoh", "ammonia", "nh4oh", "alkali"),
+    "coolant_flow": ("cooling", "coolant", "jacket flow", "cooling water"),
+    "agitation": ("agitation", "stirrer", "rpm", "impeller"),
+}
+COLUMN_HINTS: dict[str, tuple[str, ...]] = {  # field -> name fragments
+    "batch_id": ("batch", "lot no", "run", "batch id", "batch_id"),
+    "timestamp": ("time", "date", "timestamp", "sampled", "datetime"),
+    "elapsed_hours": ("elapsed", "hours", "process time", "age", "eft", "(h)"),
+    "available_at": ("reported", "result time", "available", "approved", "released"),
+    "variable": ("test", "parameter", "analyte", "variable", "assay"),
+    "value": ("result", "value", "reading"),
+    "unit": ("unit", "units", "uom"),
+    "text": ("note", "comment", "observation", "remark"),
+    "start_time": ("inocul", "start", "began"),
+    "bioreactor_id": ("vessel", "reactor", "fermenter", "fermentor", "tank"),
+    "medium_lot": ("medium", "media"),
+    "inoculum_lot": ("seed", "inoculum", "starter"),
+    "category": ("outcome", "result", "status", "verdict", "disposition"),
+    "onset_h": ("started", "onset"),
+    "reference_event_h": ("noticed", "detected", "first seen"),
+    "reason": ("comment", "reason", "note"),
+}
+
+
+def _norm(name: str) -> str:
+    return " ".join(str(name).lower().replace("_", " ").split())
+
+
+def _matches(name: str, fragment: str) -> bool:
+    """Whole-word match for short fragments ('ph', 'do', 'od'), substring otherwise."""
+    n = _norm(name)
+    if len(fragment) <= 3:
+        words = "".join(ch if ch.isalnum() else " " for ch in n).split()
+        return fragment in words
+    return fragment in n
+
+
+def suggest_variable(column: str, export_names: dict[str, list[str]] | None = None) -> str | None:
+    """The registered variable an export column most likely holds, or None.
+
+    ``export_names`` (from a plant profile) are exact names checked first."""
+    for var, names in (export_names or {}).items():
+        if _norm(column) in {_norm(n) for n in names}:
+            return var
+    for var, fragments in VARIABLE_HINTS.items():
+        if any(_matches(column, f) for f in fragments):
+            return var
+    n = _norm(column)
+    return n if n in VARIABLES else None
+
+
+def suggest_column(columns, field: str, exclude=()) -> str | None:
+    """The column most likely to hold ``field`` (e.g. 'batch_id'), or None."""
+    candidates = [c for c in columns if c not in exclude]
+    for fragment in COLUMN_HINTS.get(field, (field,)):
+        for c in candidates:
+            if _norm(c) == fragment:
+                return c
+    for fragment in COLUMN_HINTS.get(field, (field,)):
+        for c in candidates:
+            if _matches(c, fragment):
+                return c
+    return None
+
+
+FILE_KINDS = (
+    "online signals (one column per signal)",
+    "lab results (one row per result)",
+    "batch records",
+    "outcomes",
+    "operator notes",
+    "ignore",
+)
+
+
+def suggest_file_kind(df: pd.DataFrame) -> str:
+    cols = list(df.columns)
+    if suggest_column(cols, "text") and len(cols) <= 4:
+        return FILE_KINDS[4]
+    if suggest_column(cols, "category") and not suggest_column(cols, "timestamp"):
+        return FILE_KINDS[3]
+    if suggest_column(cols, "start_time") or suggest_column(cols, "bioreactor_id"):
+        return FILE_KINDS[2]
+    if suggest_column(cols, "variable") and suggest_column(cols, "value"):
+        return FILE_KINDS[1]
+    return FILE_KINDS[0]
+
+
+CATEGORY_HINTS = {  # outcome label fragments -> category
+    "contamination": ("contam", "infect", "foreign"),
+    "normal": ("ok", "normal", "pass", "good", "released", "approved", "in spec"),
+    "non_contamination_anomaly": ("other", "fail", "deviation", "low yield", "anomal"),
+}
+ROLE_CANDIDATES = {  # role -> variables that can play it, in order of preference
+    "biomass": ("biomass_od600", "biomass_offline"),
+    "oxygen": ("dissolved_oxygen", "do2_mg_l"),
+    "ph": ("ph", "ph_offline"),
+    "product": ("enzyme_activity", "penicillin_offline"),
+    "temperature": ("temperature",),
+    "ph_control": ("base_flow",),
+    "temperature_control": ("coolant_flow",),
+}
+
+
+def suggest_category(label) -> str | None:
+    n = _norm(label)
+    for category, fragments in CATEGORY_HINTS.items():
+        if any(_matches(n, f) for f in fragments):
+            return category
+    return n if n in OUTCOME_CATEGORIES else None
+
+
+def _is_datetime(series: pd.Series) -> bool:
+    sample = series.dropna().astype(str).head(20)
+    if sample.empty or pd.to_numeric(sample, errors="coerce").notna().all():
+        return False
+    return pd.to_datetime(sample, errors="coerce", format="mixed").notna().mean() > 0.8
+
+
+def _time_fields(df: pd.DataFrame, exclude) -> dict:
+    """Timestamp column if one parses as dates, else an elapsed-hours column."""
+    cols = [c for c in df.columns if c not in exclude]
+    ts = suggest_column(cols, "timestamp")
+    if ts and _is_datetime(df[ts]):
+        return {"timestamp": ts}
+    el = suggest_column(cols, "elapsed_hours")
+    if el and pd.to_numeric(df[el], errors="coerce").notna().any():
+        return {"elapsed_hours": el}
+    return {"timestamp": ts} if ts else {}
+
+
+def draft_mapping(
+    frames: dict[str, pd.DataFrame],
+    export_names: dict[str, list[str]] | None = None,
+    process_name: str = "imported process",
+    kinds: dict[str, str] | None = None,
+) -> dict:
+    """A suggested mapping for uploaded exports ({file name: table}), to be reviewed.
+
+    Every field is a guess from column names and contents (``kinds`` overrides the
+    guessed file kinds); the dashboard shows each one for the user to confirm or change
+    before anything is converted."""
+    m: dict = {"process_name": process_name, "variables": {}, "measurements": []}
+    kinds = {name: (kinds or {}).get(name) or suggest_file_kind(df) for name, df in frames.items()}
+    for name, df in frames.items():
+        kind, cols = kinds[name], list(df.columns)
+        batch = suggest_column(cols, "batch_id")
+        if kind == FILE_KINDS[0]:
+            spec = {"file": name, "layout": "wide", "batch_id": batch}
+            spec |= _time_fields(df, {batch})
+            spec["source"] = "online_sensor"
+            used = {batch, *spec.values()}
+            spec["columns"] = {
+                c: v
+                for c in cols
+                if c not in used and (v := suggest_variable(c, export_names)) is not None
+            }
+            m["measurements"].append(spec)
+        elif kind == FILE_KINDS[1]:
+            spec = {"file": name, "layout": "long", "batch_id": batch}
+            spec |= _time_fields(df, {batch})
+            used = {batch, *spec.values()}
+            for f in ("available_at", "variable", "value", "unit"):
+                c = suggest_column(cols, f, exclude=used)
+                if c:
+                    spec[f] = c
+                    used.add(c)
+            spec["source"] = "offline_assay"
+            names = df[spec["variable"]].dropna().astype(str).unique() if "variable" in spec else []
+            spec["variable_map"] = {
+                n: v for n in names if (v := suggest_variable(n, export_names)) is not None
+            }
+            m["measurements"].append(spec)
+        elif kind == FILE_KINDS[2]:
+            fields = ("start_time", *GENEALOGY_COLUMNS)
+            found = {"batch_id": batch}
+            for f in fields:
+                c = suggest_column(cols, f, exclude=set(found.values()))
+                if c:
+                    found[f] = c
+            m["batches"] = {"file": name, "columns": found}
+        elif kind == FILE_KINDS[3]:
+            found = {"batch_id": batch}
+            for f in ("category", "onset_h", "reference_event_h", "reason"):
+                c = suggest_column(cols, f, exclude=set(found.values()))
+                if c:
+                    found[f] = c
+            spec = {"file": name, "columns": found}
+            if "category" in found:
+                labels = df[found["category"]].dropna().astype(str).unique()
+                spec["category_map"] = {lab: suggest_category(lab) for lab in labels}
+            m["outcomes"] = spec
+        elif kind == FILE_KINDS[4]:
+            spec = {"file": name, "batch_id": batch}
+            spec["timestamp"] = suggest_column(cols, "timestamp", exclude={batch})
+            spec["text"] = suggest_column(cols, "text", exclude={batch, spec["timestamp"]})
+            m.setdefault("observations", []).append(spec)
+    m["roles"] = suggest_roles(mapped_variables(m))
+    return m
+
+
+def mapped_variables(m: dict) -> list[str]:
+    """Variables a mapping imports, in first-seen order."""
+    out: list[str] = []
+    for spec in m.get("measurements", []):
+        for v in (*spec.get("columns", {}).values(), *spec.get("variable_map", {}).values()):
+            if v and v not in out:
+                out.append(v)
+    return out
+
+
+def suggest_roles(variables) -> dict[str, str]:
+    have = set(variables)
+    return {
+        role: next((v for v in candidates if v in have), "not_measured")
+        for role, candidates in ROLE_CANDIDATES.items()
+    }
+
+
+def mapping_yaml(m: dict) -> str:
+    """The mapping as YAML, so it can be saved and reused from the command line."""
+    return yaml.safe_dump(m, sort_keys=False, allow_unicode=True)
 
 
 # --------------------------------------------------------------------------- example
