@@ -179,3 +179,28 @@ def test_value_page_maverickx_defaults():
     at.run()
     assert not at.exception
     assert any("Not yet confirmed" in w.value for w in at.warning)
+
+
+def test_parallel_sessions_on_a_cold_process():
+    """Waking a sleeping app starts several sessions at once in one process. None may
+    purge the model while another is still importing it (that raised AttributeError /
+    KeyError inside the imports)."""
+    import sys
+    import threading
+
+    errors = []
+
+    def session():
+        at = AppTest.from_file(APP, default_timeout=180)
+        at.run()
+        errors.extend(e.message for e in at.exception)
+
+    for _ in range(2):
+        for m in [m for m in sys.modules if m == "contamination" or m.startswith("contamination.")]:
+            del sys.modules[m]
+        threads = [threading.Thread(target=session) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    assert not errors, errors

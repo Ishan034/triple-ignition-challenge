@@ -13,6 +13,7 @@ from __future__ import annotations
 import io
 import sys
 import tempfile
+import threading
 import zipfile
 from dataclasses import replace
 from pathlib import Path
@@ -32,51 +33,63 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-_loaded = sys.modules.get("contamination")
-if _loaded is not None and (
-    not str(getattr(_loaded, "__file__", "")).startswith(str(SRC))
-    or getattr(_loaded, "_src_stamp", None) != SRC_STAMP
-):
-    # A stale model is loaded in this process: drop it, and the results cached with it.
-    for name in [m for m in sys.modules if m == "contamination" or m.startswith("contamination.")]:
-        del sys.modules[name]
-    st.cache_resource.clear()
-    st.cache_data.clear()
+# Sessions run this script in parallel threads of one server process (several at once
+# when a sleeping app wakes up). The stale-model check, the purge and the imports must
+# not interleave: a purge during another session's import removes a module that is
+# still being executed. One lock per process, kept on ``sys`` so reruns of this script
+# (which re-execute this file) share it.
+_IMPORT_LOCK = vars(sys).setdefault("_contamination_import_lock", threading.RLock())
+_IMPORT_LOCK.acquire()
+try:
+    _loaded = sys.modules.get("contamination")
+    if _loaded is not None and (
+        not str(getattr(_loaded, "__file__", "")).startswith(str(SRC))
+        or getattr(_loaded, "_src_stamp", None) != SRC_STAMP
+    ):
+        # A stale model is loaded in this process: drop it, and the results cached with it.
+        for name in [
+            m for m in sys.modules if m == "contamination" or m.startswith("contamination.")
+        ]:
+            del sys.modules[name]
+        st.cache_resource.clear()
+        st.cache_data.clear()
 
-import contamination
-from contamination import records
-from contamination.diagnosis import NOT_MEASURED, load_knowledge
-from contamination.evaluate import per_batch
-from contamination.importer import (
-    FILE_KINDS,
-    GENEALOGY_COLUMNS,
-    convert,
-    convert_mapping,
-    draft_mapping,
-    mapped_variables,
-    mapping_yaml,
-    readiness,
-    suggest_category,
-    suggest_file_kind,
-    suggest_roles,
-    suggest_variable,
-)
-from contamination.monitor import DEFAULT_CONFIG
-from contamination.pipeline import (
-    diagnose_batch_as_of,
-    diagnosis_timeline,
-    first_named,
-    fit_cached,
-    load_campaign,
-    measurements_path,
-    run_campaign,
-)
-from contamination.plant import load_plant
-from contamination.schema import INVESTIGATION_COLUMNS, OUTCOME_CATEGORIES, VARIABLES
-from contamination.triage import at_risk, escalation_text, headline, triage
-from contamination.value import ValueInputs, estimate
+    import contamination
+    from contamination import records
+    from contamination.diagnosis import NOT_MEASURED, load_knowledge
+    from contamination.evaluate import per_batch
+    from contamination.importer import (
+        FILE_KINDS,
+        GENEALOGY_COLUMNS,
+        convert,
+        convert_mapping,
+        draft_mapping,
+        mapped_variables,
+        mapping_yaml,
+        readiness,
+        suggest_category,
+        suggest_file_kind,
+        suggest_roles,
+        suggest_variable,
+    )
+    from contamination.monitor import DEFAULT_CONFIG
+    from contamination.pipeline import (
+        diagnose_batch_as_of,
+        diagnosis_timeline,
+        first_named,
+        fit_cached,
+        load_campaign,
+        measurements_path,
+        run_campaign,
+    )
+    from contamination.plant import load_plant
+    from contamination.schema import INVESTIGATION_COLUMNS, OUTCOME_CATEGORIES, VARIABLES
+    from contamination.triage import at_risk, escalation_text, headline, triage
+    from contamination.value import ValueInputs, estimate
 
-contamination._src_stamp = SRC_STAMP
+    contamination._src_stamp = SRC_STAMP
+finally:
+    _IMPORT_LOCK.release()
 
 OBSERVED = "#2a78d6"
 BAND = "rgba(140, 140, 135, 0.22)"
